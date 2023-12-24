@@ -1,0 +1,50 @@
+{
+  "name": "translation-gpt devcontainer",
+  // Update the 'dockerComposeFile' list if you have more compose files or use different names.
+  // The .devcontainer/docker-compose.yml file contains any overrides you need/want to make.
+  "dockerComposeFile": ["docker-compose.yml"],
+  // The 'service' property is the name of the service for the container that VS Code should
+  // use. Update this value and .devcontainer/docker-compose.yml to the real service name.
+  "service": "app",
+  // The optional 'workspaceFolder' property is the path VS Code should open by default when
+  // connected. This is typically a file mount in .devcontainer/docker-compose.yml
+  "workspaceFolder": "/app",
+  // Set *default* container specific settings.json values on container create.
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "editor.renderWhitespace": "all",
+        "[json][jsonc]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.fixAll": true
+          }
+        },
+        "[typescript]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.codeActionsOnSave": {
+            "source.fixAll": true
+          }
+        },
+        // vscode が使う typescript のバージョンを、terminal で使われるバージョンと一致させる
+        "typescript.tsdk": "node_modules/typescript/lib",
+        // md で toc を作成するときのレベルを設定
+        "markdown.extension.toc.levels": "2..4",
+        "terminal.integrated.shell.linux": "/bin/bash"
+      },
+      "extensions": [
+        "editorconfig.editorconfig",
+        // prettier
+        "esbenp.prettier-vscode",
+        // typescript
+        "ms-vscode.vscode-typescript",
+        // docker
+        "ms-azuretools.vscode-docker",
+        // md
+        "yzhang.markdown-all-in-one"
+      ]
+    }
+  }
+}
