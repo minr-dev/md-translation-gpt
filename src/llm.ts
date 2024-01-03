@@ -1,6 +1,6 @@
 import { Runnable } from 'langchain/schema/runnable';
 import { ChatOpenAI } from 'langchain/chat_models/openai';
-import { ILlm } from './core';
+import { ILlm } from './interfaces';
 
 const JSON_RESPONSE_FORMAT = 'json_object';
 

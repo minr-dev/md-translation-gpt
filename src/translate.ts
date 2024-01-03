@@ -7,14 +7,13 @@ import { ChatPromptTemplate } from 'langchain/prompts';
 import { StructuredOutputParser } from 'langchain/output_parsers';
 import { logger } from './logger.js';
 import { Config } from './config.js';
-import { ITranslator, ILlm } from './core.js';
+import { ITranslator, ILlm } from './interfaces.js';
 
 const MAX_TRANSLATION_ATTEMPTS = 5;
 
 interface JapaneseTranslated {
   isJapanese: boolean;
   ja: string;
-  en: string;
   error: string;
 }
 
@@ -22,6 +21,7 @@ interface ProofreadRequest {
   isTitleBlock: boolean;
   original: string;
   ja: string;
+  histories: ProofreadHistory[];
 }
 
 interface ProofreadResult {
@@ -50,73 +50,65 @@ interface TranslateCache {
   japaneseTranslated: JapaneseTranslated;
 }
 
-/**
- * 翻訳する
- *
- * @param srcLangText
- * @returns
- */
+interface ProofreadHistory {
+  jpText: string;
+  proofreadResult: ProofreadResult;
+}
+
 export class ProofreadTranslatorImpl implements ITranslator {
   constructor(private llm: ILlm) {}
 
   async translate(srcLangText: string, isTitleBlock: boolean): Promise<string> {
     logger.verbose('ProofreadTranslatorImpl.translate', srcLangText);
     for (let retryCorrectness = 0; retryCorrectness < 5; retryCorrectness++) {
-      const caches: TranslateCache[] = [];
+      const histories: ProofreadHistory[] = [];
       let lastProofreadResult = undefined;
+      const jpResponse = await translateToJp(
+        this.llm,
+        srcLangText,
+        [],
+        isTitleBlock
+      );
+      let jpText = jpResponse.ja;
+      logger.verbose('jpResponse', jpResponse);
+      if (jpResponse.isJapanese) {
+        return '';
+      }
       for (let i = 0; i < MAX_TRANSLATION_ATTEMPTS; i++) {
-        logger.verbose('translate retry loop count', i);
-        const jpResponse = await translateToJp(
-          this.llm,
-          srcLangText,
-          caches,
-          isTitleBlock
-        );
-        logger.verbose('jpResponse', jpResponse);
-        if (jpResponse.isJapanese) {
-          return '';
-        }
+        logger.verbose('translation attempts count', i);
         const proofread = await this.proofreadTranslation({
           isTitleBlock: isTitleBlock,
           original: srcLangText,
-          ja: jpResponse.ja,
+          ja: jpText,
+          histories: histories,
         });
-        caches.push({
-          correctness: {
-            correctness: proofread.correctness,
-            error: proofread.error,
-            proofreadType: 'proofread',
-          },
-          japaneseTranslated: {
-            isJapanese: false,
-            ja: proofread.proofreadText,
-            en: jpResponse.en,
-            error: jpResponse.error,
-          },
+        histories.push({
+          jpText: jpText,
+          proofreadResult: proofread,
         });
-        logger.verbose('proofread', proofread);
+        logger.verbose('添削結果', proofread);
         if (proofread.correctness >= Config.translationCorrectnessThreshold) {
           lastProofreadResult = proofread;
           break;
         }
+        jpText = proofread.proofreadText;
       }
       if (lastProofreadResult !== undefined) {
-        logger.info('translate', {
+        logger.info('翻訳結果', {
           original: srcLangText,
           japanese: lastProofreadResult.proofreadText,
           error: lastProofreadResult.error,
           correctness: lastProofreadResult.correctness,
-          translationCount: caches.length,
+          translationCount: histories.length,
         });
         return lastProofreadResult.proofreadText;
       }
-      if (caches.length === MAX_TRANSLATION_ATTEMPTS) {
-        // 再評価の規定回数を超えてた場合、最後の添削結果を返す
-        logger.warn(`translate: 再評価の規定回数を超えました.
+      if (histories.length === MAX_TRANSLATION_ATTEMPTS) {
+        logger.warn(`規定の翻訳回数を超えました.
 original: ${srcLangText},
-log: ${JSON.stringify(caches, null, 2)}
+history: ${JSON.stringify(histories, null, 2)}
 `);
-        return caches[caches.length - 1].japaneseTranslated.ja;
+        return histories[histories.length - 1].proofreadResult.proofreadText;
       }
     }
     throw new Error('failed to translate');
@@ -133,7 +125,7 @@ log: ${JSON.stringify(caches, null, 2)}
     const systemTemplate = `${HHH_prompt}
 
 <Context>
-翻訳前のオリジナルの文章と、翻訳結果を比較して、意味が同じになるように添削してください。
+翻訳前のオリジナルの文章と、日本語訳を比較して、意味が同じになるように添削してください。
 - テキストは、マークダウン書式です。
 ${srcLangTextDescription}
 
@@ -142,8 +134,9 @@ ${srcLangTextDescription}
 - 文脈に沿っているか確認して訂正する
 - 抜けている文脈が無いか確認して訂正する
 - 異なる意味になっていないか確認して訂正する
-- 不自然な日本語のなっている部分を訂正する
+- 不自然な日本語になっている部分を訂正する
 - 日本語から英語にリバース翻訳をして、オリジナルと同じ意味になっているか確認する
+- 添削後の日本語訳は、過去に問題指摘した訳であってはならない
 
 {formatInstructions}
 `;
@@ -152,8 +145,9 @@ ${srcLangTextDescription}
     // structuredParser.getFormatInstructions() を使うと英文が混ざるからか、responseのJSONが正しくないので、対処療法的だが日本語で作成する
     const formatInstructionsForStringParser = `
 - 評価結果は、必ず JSON のみで返してください。JSON のプロパティは次のとおりです。
+- proofreadText: 添削後の日本語訳
 - correctness: 翻訳の正確性、 0.0 ～ 1.0 の数値で、最も正確な値が 1.0
-- error: まだ改善した方がよい場合は、問題点を指摘してください
+- error: 添削して修正した内容の詳細
 `;
 
     const humanTemplate = `
@@ -161,9 +155,17 @@ ${srcLangTextDescription}
 オリジナル:
 {original}
 
-翻訳結果:
+日本語訳:
 {ja}
+
+{jaHistories}
 `;
+
+    let jaHistories = '';
+    if (req.histories.length > 0) {
+      jaHistories = '過去に問題指摘した訳:\n';
+      jaHistories += req.histories.map(h => `- ${h.jpText}`).join('\n');
+    }
 
     const chatPrompt = ChatPromptTemplate.fromMessages([
       ['system', systemTemplate],
@@ -179,24 +181,27 @@ ${srcLangTextDescription}
             this.llm.model,
             stringParser,
           ]);
-          const response = await chain.invoke({
+          const variables = {
             original: req.original,
             ja: req.ja,
             formatInstructions: formatInstructionsForStringParser,
-          });
-          logger.verbose('response', response);
+            jaHistories: jaHistories,
+          };
+          dprintPrompt(
+            [
+              ['system', systemTemplate],
+              ['human', humanTemplate],
+            ],
+            variables
+          );
+          const response = await chain.invoke(variables);
           result = JSON.parse(response);
         } else {
           throw new Error('not implemented');
         }
-        if (!result.proofreadText || result.proofreadText === '') {
-          result.proofreadText = req.ja;
-        }
-        logger.verbose('result', result);
         return result;
       } catch (e) {
         if (e instanceof OutputParserException) {
-          // OutputParserExceptionの場合の処理をここに書く
           logger.error('OutputParserException', e);
           continue;
         }
@@ -216,7 +221,7 @@ export class ReverseCheckTranslatorImpl implements ITranslator {
       const caches: TranslateCache[] = [];
       let lastCorrectness = undefined;
       for (let i = 0; i < MAX_TRANSLATION_ATTEMPTS; i++) {
-        logger.verbose('translate retry loop count', i);
+        logger.verbose('translation attempts count', i);
         const jpResponse = await translateToJp(
           this.llm,
           srcLangText,
@@ -359,7 +364,6 @@ ${srcLangTextDescription}
   const structuredParser = StructuredOutputParser.fromNamesAndDescriptions({
     isJapanese: 'オリジナルのテキストがすでに日本語だったら true',
     ja: '日本語訳',
-    en: '日本語から英語への翻訳',
     error: '翻訳が正しくできなかったときの理由',
   });
   const formatInstructions = structuredParser.getFormatInstructions();
@@ -369,7 +373,6 @@ ${srcLangTextDescription}
 - 意訳した結果は、必ず JSON でのみで返してください。JSON のプロパティは次のとおりです。
 - isJapanese: オリジナルのテキストがすでに日本語だったら true
 - ja: 日本語訳
-- en: 日本語から英語への翻訳
 - error: 翻訳が正しくできなかったときの理由
 `;
   const humanTemplate = `
@@ -392,12 +395,19 @@ ${srcLangTextDescription}
           llm.model,
           stringParser,
         ]);
-        const response = await chain.invoke({
+        const variables = {
           srcLangText: srcLangText,
           error: error,
           formatInstructions: formatInstructionsForStringParser,
-        });
-        logger.verbose('response', response);
+        };
+        dprintPrompt(
+          [
+            ['system', systemTemplate],
+            ['human', humanTemplate],
+          ],
+          variables
+        );
+        const response = await chain.invoke(variables);
         result = JSON.parse(response);
       } else {
         const chain = RunnableSequence.from([
@@ -413,18 +423,15 @@ ${srcLangTextDescription}
         result = {
           isJapanese: response.isJapanese === 'true',
           ja: response.ja,
-          en: response.en,
           error: response.error,
         };
       }
-      logger.verbose('result', result);
       if (!result.isJapanese && (!result.ja || result.ja === '')) {
         continue;
       }
       return result;
     } catch (e) {
       if (e instanceof OutputParserException) {
-        // OutputParserExceptionの場合の処理をここに書く
         logger.error('OutputParserException', e);
         continue;
       }
@@ -496,15 +503,12 @@ ${srcLangTextDescription}
           jpText: jpText,
           formatInstructions: formatInstructionsForStringParser,
         });
-        logger.verbose('response', response);
         result = JSON.parse(response);
       } else {
         const response = await chain.invoke({
           jpText: jpText,
           formatInstructions: formatInstructions,
         });
-
-        logger.verbose('response', response);
         if (response.en === '') {
           continue;
         }
@@ -513,14 +517,12 @@ ${srcLangTextDescription}
           error: response.error,
         };
       }
-      logger.verbose('result', result);
       if (!result.en || result.en === '') {
         continue;
       }
       return result;
     } catch (e) {
       if (e instanceof OutputParserException) {
-        // OutputParserExceptionの場合の処理をここに書く
         logger.error('OutputParserException', e);
         continue;
       }
@@ -606,7 +608,6 @@ ${srcLangTextDescription}
           enText: enText,
           formatInstructions: formatInstructionsForStringParser,
         });
-        logger.verbose('response', response);
         result = JSON.parse(response);
       } else {
         const response = await chain.invoke({
@@ -615,19 +616,15 @@ ${srcLangTextDescription}
           enText: enText,
           formatInstructions: formatInstructions,
         });
-
-        logger.verbose('response', response);
         result = {
           correctness: parseFloat(response.correctness),
           error: response.error,
           proofreadType: 'reverse',
         };
       }
-      logger.verbose('result', result);
       return result;
     } catch (e) {
       if (e instanceof OutputParserException) {
-        // OutputParserExceptionの場合の処理をここに書く
         logger.error('OutputParserException', e);
         continue;
       }
@@ -707,24 +704,19 @@ ${list}
           srcLangText: srcLangText,
           formatInstructions: formatInstructionsForStringParser,
         });
-        logger.verbose('response', response);
         result = JSON.parse(response);
       } else {
         const response = await chain.invoke({
           srcLangText: srcLangText,
           formatInstructions: formatInstructions,
         });
-
-        logger.verbose('response', response);
         result = {
           choiceNo: parseInt(response.choiceNo),
         };
       }
-      logger.verbose('result', result);
       return result;
     } catch (e) {
       if (e instanceof OutputParserException) {
-        // OutputParserExceptionの場合の処理をここに書く
         logger.error('OutputParserException', e);
         continue;
       }
@@ -732,4 +724,27 @@ ${list}
     }
   }
   throw new Error('failed to choiceTranslation');
+};
+
+const dprintPrompt = (
+  templates: string[][],
+  variables: { [key: string]: string | number }
+): void => {
+  const format = (
+    template: string,
+    variables: { [key: string]: string | number }
+  ): string => {
+    let result = template;
+    for (const key in variables) {
+      result = result.replace(`{${key}}`, variables[key].toString());
+    }
+    return result;
+  };
+  let debug = '';
+  for (const t of templates) {
+    debug += `${t[0]}:\n`;
+    debug += format(t[1], variables);
+    debug += '\n';
+  }
+  logger.debug(debug);
 };

@@ -1,10 +1,10 @@
-import { writeFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
 import path from 'path';
 import fs from 'fs';
 import { logger } from './logger.js';
 import { Config } from './config.js';
-import { IMdProcessor } from './core.js';
+import { IMdProcessorFactory } from './interfaces.js';
 
 /**
  * 翻訳結果をファイルに書き込む
@@ -66,20 +66,17 @@ const getOutputFilePath = (
   return outputFilePath;
 };
 
-/**
- * glob パターンに一致するファイルを取得して処理する
- *
- * ファイルは、 md, mdx, ipynb のみ処理する
- *
- * @param pattern glob パターン
- * @param output 出力先ディレクトリ
- */
-export class MdFileWalker {
-  constructor(
-    private mdProsessor: IMdProcessor,
-    private ipynbProsessor: IMdProcessor
-  ) {}
+export class FileWalker {
+  constructor(private mdProcessorFactory: IMdProcessorFactory) {}
 
+  /**
+   * glob パターンに一致するファイルを走査して処理を実行する
+   *
+   * ファイルは、 md, mdx, ipynb のみ処理する
+   *
+   * @param pattern glob パターン
+   * @param output 出力先ディレクトリ
+   */
   async walk(pattern: string, output: string): Promise<void> {
     logger.verbose('pattern', pattern);
     const files = glob.globSync(pattern);
@@ -89,13 +86,8 @@ export class MdFileWalker {
       if (fs.lstatSync(file).isDirectory()) {
         continue;
       }
-      // 拡張子を取得して、処理するファイルかどうかを判定する
       const ext = path.extname(file).toLowerCase();
       const outputFilePath = getOutputFilePath(file, baseDir, output);
-      if (!['.md', '.mdx', '.ipynb'].includes(ext)) {
-        logger.info(`${file} skipped`);
-        continue;
-      }
       if (fs.existsSync(outputFilePath)) {
         if (!Config.isOverwrite) {
           logger.info(`${outputFilePath} exists`);
@@ -103,14 +95,13 @@ export class MdFileWalker {
         }
       }
       logger.info(`${file} ...`);
-      let result = undefined;
-      if ('.md' === ext || '.mdx' === ext) {
-        result = await this.mdProsessor.process(file);
-      } else if ('.ipynb' === ext) {
-        result = await this.ipynbProsessor.process(file);
-      } else {
-        throw new Error(`invalid ext: ${ext}`);
+      const mdProcessor = this.mdProcessorFactory.getProcessor(ext);
+      if (!mdProcessor) {
+        logger.info(`${file} skipped`);
+        continue;
       }
+      const data = readFileSync(file, 'utf-8');
+      const result = await mdProcessor.process(data);
       writeTranslatedMd(outputFilePath, result);
       logger.info(`${file} writed to ${outputFilePath}`);
     }

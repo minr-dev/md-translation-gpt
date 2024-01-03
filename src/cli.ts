@@ -4,10 +4,10 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { logger, LogLevel } from './logger.js';
 import { Config } from './config.js';
-import { MdFileWalker } from './mdFileWalker.js';
-import { IpynbProcessorImpl, MdProcessorImpl } from './md.js';
+import { FileWalker } from './file_walker.js';
 import { ProofreadTranslatorImpl } from './translate.js';
 import { LlmImpl } from './llm.js';
+import { MdProcessorFactoryImpl } from './md_processor_factory.js';
 
 const moduleDir = fileURLToPath(new URL('.', import.meta.url));
 
@@ -49,11 +49,10 @@ const program = new Command();
           throw new Error('OPENAI_API_KEY is not set');
         }
         const llm = new LlmImpl();
+
         const translator = new ProofreadTranslatorImpl(llm);
-        const walker = new MdFileWalker(
-          new MdProcessorImpl(translator),
-          new IpynbProcessorImpl(translator)
-        );
+        const mdProcessorFactory = new MdProcessorFactoryImpl(translator);
+        const walker = new FileWalker(mdProcessorFactory);
         await walker.walk(request.pattern as string, request.output as string);
         logger.info('success');
       } catch (e) {

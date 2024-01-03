@@ -1,20 +1,22 @@
-import path from 'path';
-import { readFileSync } from 'fs';
 import { remark } from 'remark';
 import { Parent, Blockquote, RootContent } from 'mdast';
 import frontmatter from 'remark-frontmatter';
 import stringify from 'remark-stringify';
 import { logger } from './logger.js';
-import { IMdProcessor, ITranslator } from './core.js';
+import { IMdProcessor, ITranslator } from './interfaces.js';
 import { Root } from 'remark-parse/lib/index.js';
 
-const processor = remark().use(frontmatter, ['yaml']).use(stringify);
+export interface IParseResult {
+  ast: Root;
+  tnodes: ITargetNode[];
+}
 
-interface ITargetNode {
+export interface ITargetNode {
   node: Parent;
   parent: Parent;
   srcText: string;
   replaceNodes?: RootContent[];
+  type: 'text' | ':::';
 }
 
 const visitWithParent = (
@@ -39,27 +41,39 @@ const visitParent = (
 };
 
 /**
- * md と mdx を処理する
+ * md を翻訳する
+ *
+ * md は ast に変換して、ast の child node のうち、heading と paragraph について
+ * 翻訳処理して、翻訳後のテキストで node を作り直して、ast を書き換えて md に戻す。
  *
  * @param file ファイル名
  * @returns 翻訳後の md
  */
 export class MdProcessorImpl implements IMdProcessor {
+  protected processor = remark().use(frontmatter, ['yaml']).use(stringify);
+
   constructor(private translator: ITranslator) {}
 
-  async process(file: string): Promise<string> {
-    logger.verbose('MdProcessor.process', file);
-    const isMdx = path.extname(file).toLowerCase() === '.mdx';
-    const md = readFileSync(file, 'utf-8');
-    const result = await this.parseMd(md, isMdx);
-    return result;
+  async process(data: string): Promise<string> {
+    logger.verbose('MdProcessor.process');
+    const result = await this.parseMd(data);
+    await this.translateNodes(result);
+    const tranlatedMd = await this.recreateAst(result);
+    return tranlatedMd;
   }
 
-  protected async parseMd(md: string, isMdx: boolean): Promise<string> {
-    const ast = processor.parse(md);
-    // 翻訳結果のデータでmdのノードを作って、 AST の配列を削除して新しいノードを差し込んだりするが、
-    // visit パターンの処理途中で削除するとバグになり易いので、3段階に分けて処理を行う
-    // step1: 処理対象のノードを、いったん tnodes に入れる
+  /**
+   * md を ast に変換して、翻訳対象の heading と paragraph の node を抽出する
+   *
+   * 翻訳は、対象のnodeをchild node を含めて、テキストに戻したものを翻訳するので、
+   * 例えば、paragraph を構成する child node は、テキストだけではなく、 link があったり、
+   * list、blockquote などの細かく分かれるが、翻訳する時点では、paragraph の node 配下を
+   * テキストに変換して、まとめて翻訳する。
+   *
+   * @param md
+   */
+  protected async parseMd(md: string): Promise<IParseResult> {
+    const ast = this.processor.parse(md);
     logger.debug('ast', JSON.stringify(ast, null, 2));
     const tnodes: ITargetNode[] = [];
     visitWithParent(ast, (node, parent) => {
@@ -71,32 +85,41 @@ export class MdProcessorImpl implements IMdProcessor {
           // heading や paragraph の上位層には root が必ずあるので parent が null の状態はない
           throw new Error(`parent is null: ${JSON.stringify(node)}`);
         }
-        const srcText = processor.stringify(node as Root);
-        // mdx で @theme/*** の import 文は翻訳しない
-        if (
-          isMdx &&
-          srcText.match(/^\s*import\s+DocCardList\s+from\s+["']@theme/)
-        ) {
-          return;
-        }
+        const srcText = this.processor.stringify(node as Root);
         tnodes.push({
           node: node,
           parent: parent,
           srcText: srcText,
+          type: 'text',
         });
       }
     });
-    // step2: 処理対象のノードを翻訳して、翻訳後のノードを tnodes に入れる
-    for (const tnode of tnodes) {
+    return Promise.resolve({
+      ast: ast,
+      tnodes: tnodes,
+    });
+  }
+
+  /**
+   * 処理対象のノードを翻訳して、翻訳後のノードを tnodes に入れる
+   *
+   * @param result
+   * @returns
+   */
+  protected async translateNodes(result: IParseResult): Promise<void> {
+    for (const tnode of result.tnodes) {
+      if (tnode.type !== 'text') {
+        continue;
+      }
       if (tnode.node.type === 'heading') {
         const translated = await this.translateHeadings(tnode.srcText);
-        const root = processor.parse(translated);
+        const root = this.processor.parse(translated);
         logger.debug('heading translated', JSON.stringify(root, null, 2));
         tnode.replaceNodes = root.children;
       } else if (tnode.node.type === 'paragraph') {
         const translated = await this.translateParagraph(tnode.srcText);
         if (translated != tnode.srcText) {
-          const root = processor.parse(translated);
+          const root = this.processor.parse(translated);
           logger.debug('paragraph translated', JSON.stringify(root, null, 2));
           tnode.replaceNodes = root.children.concat([
             {
@@ -109,12 +132,21 @@ export class MdProcessorImpl implements IMdProcessor {
         throw new Error(`unknown node type: ${JSON.stringify(tnode.node)}`);
       }
     }
-    logger.debug('tnodes', JSON.stringify(tnodes, null, 2));
-    // step3: 翻訳後のノードで AST を加工する
-    // tnodeには、対象nodeとそのnodeの親要素(parent)も保存してあるので、ASTの全部のnode再帰的に比較しなくても、
-    // parentのchildrenを一階層のみ探せば見つかる。
-    // 一致するnodeが見つかったら、そのnodeを翻訳結果で作成された tnode.replaceNodes で置き換える。
-    for (const tnode of tnodes) {
+    logger.debug('tnodes', JSON.stringify(result.tnodes, null, 2));
+  }
+
+  /**
+   * 翻訳後の node で ast を作り直す
+   *
+   * tnodeには、対象nodeとそのnodeの親要素(parent)も保存してあるので、ASTの全部のnodeを再帰的に比較しなくても、
+   * parentのchildrenを一階層のみ探せば見つかる。
+   * 一致するnodeが見つかったら、そのnodeを翻訳結果で作成された tnode.replaceNodes で置き換える。
+   *
+   * @param result
+   * @returns
+   */
+  protected async recreateAst(result: IParseResult): Promise<string> {
+    for (const tnode of result.tnodes) {
       for (let i = 0; i < tnode.parent.children.length; i++) {
         if (tnode.parent.children[i] !== tnode.node) {
           continue;
@@ -126,15 +158,15 @@ export class MdProcessorImpl implements IMdProcessor {
         break;
       }
     }
-    logger.debug('ast', JSON.stringify(ast, null, 2));
-    const result = processor.stringify(ast);
-    return result;
+    logger.debug('ast', JSON.stringify(result.ast, null, 2));
+    const md = this.processor.stringify(result.ast);
+    return Promise.resolve(md);
   }
 
   protected async translateHeadings(srcText: string): Promise<string> {
     logger.verbose('translateHeadings', srcText);
     srcText = srcText.trim();
-    const text = srcText.replace(/^#+/g, '');
+    const text = srcText.replace(/^#+\s*/g, '');
     const dstText = await this.translator.translate(text, true);
     if (dstText === '') {
       return srcText;
@@ -153,28 +185,5 @@ export class MdProcessorImpl implements IMdProcessor {
     } else {
       return dstText;
     }
-  }
-}
-
-/**
- * ipynb を処理する
- *
- * @param file ファイル名
- * @returns 翻訳後の md
- */
-export class IpynbProcessorImpl extends MdProcessorImpl {
-  async process(file: string): Promise<string> {
-    logger.verbose('IpynbProcessor.process', file);
-    const text = readFileSync(file, 'utf-8');
-    const json = JSON.parse(text);
-    const cells = json.cells;
-    for (const cell of cells) {
-      if (cell.cell_type === 'markdown') {
-        const md = (cell.source as string[]).join('');
-        const result = await this.parseMd(md, false);
-        cell.source = result.split('\n');
-      }
-    }
-    return JSON.stringify(json, null, 1);
   }
 }

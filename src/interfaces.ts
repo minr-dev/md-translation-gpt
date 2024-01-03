@@ -1,7 +1,11 @@
 import { Runnable } from 'langchain/schema/runnable';
 
 export interface IMdProcessor {
-  process(file: string): Promise<string>;
+  process(test: string): Promise<string>;
+}
+
+export interface IMdProcessorFactory {
+  getProcessor(ext: string): IMdProcessor | undefined;
 }
 
 export interface ILlm {
