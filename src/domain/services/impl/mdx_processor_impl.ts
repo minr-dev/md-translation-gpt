@@ -1,4 +1,6 @@
-import { IParseResult, MdProcessorImpl } from './md_processor.js';
+import { IAppContext } from '../../../shared/app_context.js';
+import { MdDoc, MdDocId } from '../../md_doc.js';
+import { IParseResult, MdProcessorImpl } from './md_processor_impl.js';
 import { Text, Blockquote, PhrasingContent, RootContent } from 'mdast';
 
 /**
@@ -36,16 +38,18 @@ export class MdxProcessorImpl extends MdProcessorImpl {
     }
   }
 
-  protected async translateNodes(result: IParseResult): Promise<void> {
+  protected async translateNodes(
+    ctx: IAppContext,
+    result: IParseResult
+  ): Promise<void> {
     for (const tnode of result.tnodes) {
       if (tnode.type === ':::') {
         let replaceNodes: RootContent[] = [];
         let text = '';
         const lines = tnode.srcText.split('\n');
         for (const line of lines) {
-          console.log('line', line);
           if (line.match(/^:::/)) {
-            const nodes = await this.translateDocusaurusAdminition(text);
+            const nodes = await this.translateDocusaurusAdminition(ctx, text);
             if (nodes) {
               replaceNodes = replaceNodes.concat(nodes);
             }
@@ -63,17 +67,18 @@ export class MdxProcessorImpl extends MdProcessorImpl {
           }
           text += line;
         }
-        const nodes = await this.translateDocusaurusAdminition(text);
+        const nodes = await this.translateDocusaurusAdminition(ctx, text);
         if (nodes) {
           replaceNodes = replaceNodes.concat(nodes);
         }
         tnode.replaceNodes = replaceNodes;
       }
     }
-    await super.translateNodes(result);
+    await super.translateNodes(ctx, result);
   }
 
   private async translateDocusaurusAdminition(
+    ctx: IAppContext,
     text: string
   ): Promise<RootContent[] | undefined> {
     if (text === '') {
@@ -81,6 +86,13 @@ export class MdxProcessorImpl extends MdProcessorImpl {
     }
     let replaceNodes: RootContent[] = [];
     const translated = await this.translateParagraph(text);
+    const mdDoc = new MdDoc(
+      new MdDocId(ctx.file, ctx.nodeNo),
+      'paragraph',
+      text,
+      translated
+    );
+    await this.mdDocRepository.save(mdDoc);
     if (translated != text) {
       const translatedRoot = this.processor.parse(translated);
       replaceNodes = translatedRoot.children;

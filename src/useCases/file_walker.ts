@@ -2,9 +2,10 @@ import { readFileSync, writeFileSync } from 'fs';
 import { glob } from 'glob';
 import path from 'path';
 import fs from 'fs';
-import { logger } from './logger.js';
-import { Config } from './config.js';
-import { IMdProcessorFactory } from './interfaces.js';
+import { logger } from '../shared/logger.js';
+import { Config } from '../shared/config.js';
+import { IMdProcessorFactory } from '../domain/services/md_processor.js';
+import { IAppContext } from '../shared/app_context.js';
 
 /**
  * 翻訳結果をファイルに書き込む
@@ -77,31 +78,32 @@ export class FileWalker {
    * @param pattern glob パターン
    * @param output 出力先ディレクトリ
    */
-  async walk(pattern: string, output: string): Promise<void> {
+  async walk(ctx: IAppContext, pattern: string, output: string): Promise<void> {
     logger.verbose('pattern', pattern);
     const files = glob.globSync(pattern);
     const baseDir = getBaseDir(pattern);
     for (const file of files) {
-      console.log(file);
       if (fs.lstatSync(file).isDirectory()) {
         continue;
       }
       const ext = path.extname(file).toLowerCase();
       const outputFilePath = getOutputFilePath(file, baseDir, output);
       if (fs.existsSync(outputFilePath)) {
-        if (!Config.isOverwrite) {
+        if (!Config.IS_OVERWRITE) {
           logger.info(`${outputFilePath} exists`);
           continue;
         }
       }
       logger.info(`${file} ...`);
+      const data = readFileSync(file, 'utf-8');
       const mdProcessor = this.mdProcessorFactory.getProcessor(ext);
       if (!mdProcessor) {
         logger.info(`${file} skipped`);
         continue;
       }
-      const data = readFileSync(file, 'utf-8');
-      const result = await mdProcessor.process(data);
+      ctx.file = file;
+      ctx.nodeNo = 1;
+      const result = await mdProcessor.process(ctx, data);
       writeTranslatedMd(outputFilePath, result);
       logger.info(`${file} writed to ${outputFilePath}`);
     }

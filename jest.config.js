@@ -6,7 +6,7 @@ module.exports = {
     '<rootDir>/src/**/*.ts',
     '!<rootDir>/src/__tests__/**/*.ts',
     '!<rootDir>/src/types/**/*.ts',
-    '!<rootDir>/src/cli.ts',
+    '!<rootDir>/src/main.ts',
   ],
   globals: {
     'ts-jest': {

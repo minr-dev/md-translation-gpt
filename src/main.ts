@@ -2,12 +2,13 @@ import path from 'path';
 import { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { logger, LogLevel } from './logger.js';
-import { Config } from './config.js';
-import { FileWalker } from './file_walker.js';
-import { ProofreadTranslatorImpl } from './translate.js';
-import { LlmImpl } from './llm.js';
-import { MdProcessorFactoryImpl } from './md_processor_factory.js';
+import { logger, LogLevel } from './shared/logger.js';
+import { Config } from './shared/config.js';
+import { FileWalker } from './useCases/file_walker.js';
+import { ProofreadTranslatorImpl } from './domain/services/impl/proofread_translator_impl.js';
+import { OpenAIModel } from './infra/llm/openai_model.js';
+import { MdDocRepositoryImpl } from './infra/vector/md_doc_repository_impl.js';
+import { MdProcessorFactoryImpl } from './domain/services/impl/md_processor_factory_impl.js';
 
 const moduleDir = fileURLToPath(new URL('.', import.meta.url));
 
@@ -42,18 +43,29 @@ const program = new Command();
         if (request.debug) {
           logger.setLogLevel(LogLevel.VERBOSE);
         }
-        Config.translationCorrectnessThreshold = request.accuracy;
-        Config.isOverwrite = request.force;
-        Config.isVerbose = request.debug;
-        if (Config.opeanAIApiKey === '') {
+        Config.TRANSLATION_CORRECTNESS_THRESHOLD = request.accuracy;
+        Config.IS_OVERWRITE = request.force;
+        Config.IS_VERBOSE = request.debug;
+        if (Config.OPENAI_API_KEY === '') {
           throw new Error('OPENAI_API_KEY is not set');
         }
-        const llm = new LlmImpl();
-
+        if (Config.LANCEDB_DIR === '') {
+          throw new Error('LANCEDB_DIR is not set');
+        }
+        const llm = new OpenAIModel();
         const translator = new ProofreadTranslatorImpl(llm);
-        const mdProcessorFactory = new MdProcessorFactoryImpl(translator);
+        const mdDocRepository = new MdDocRepositoryImpl();
+        const mdProcessorFactory = new MdProcessorFactoryImpl(
+          translator,
+          mdDocRepository
+        );
+        const ctx = { file: '__test__.md', nodeNo: 1 };
         const walker = new FileWalker(mdProcessorFactory);
-        await walker.walk(request.pattern as string, request.output as string);
+        await walker.walk(
+          ctx,
+          request.pattern as string,
+          request.output as string
+        );
         logger.info('success');
       } catch (e) {
         let debug = true;

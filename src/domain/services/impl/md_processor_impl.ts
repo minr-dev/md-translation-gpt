@@ -2,9 +2,13 @@ import { remark } from 'remark';
 import { Parent, Blockquote, RootContent } from 'mdast';
 import frontmatter from 'remark-frontmatter';
 import stringify from 'remark-stringify';
-import { logger } from './logger.js';
-import { IMdProcessor, ITranslator } from './interfaces.js';
 import { Root } from 'remark-parse/lib/index.js';
+import { logger } from '../../../shared/logger.js';
+import { IMdProcessor } from '../md_processor.js';
+import { ITranslator } from '../translator.js';
+import { IAppContext } from '../../../shared/app_context.js';
+import { MdDoc, MdDocId } from '../../md_doc.js';
+import { IMdDocRepository } from '../../repository/md_doc_repository.js';
 
 export interface IParseResult {
   ast: Root;
@@ -52,12 +56,15 @@ const visitParent = (
 export class MdProcessorImpl implements IMdProcessor {
   protected processor = remark().use(frontmatter, ['yaml']).use(stringify);
 
-  constructor(private translator: ITranslator) {}
+  constructor(
+    protected translator: ITranslator,
+    protected mdDocRepository: IMdDocRepository
+  ) {}
 
-  async process(data: string): Promise<string> {
+  async process(ctx: IAppContext, data: string): Promise<string> {
     logger.verbose('MdProcessor.process');
     const result = await this.parseMd(data);
-    await this.translateNodes(result);
+    await this.translateNodes(ctx, result);
     const tranlatedMd = await this.recreateAst(result);
     return tranlatedMd;
   }
@@ -103,21 +110,39 @@ export class MdProcessorImpl implements IMdProcessor {
   /**
    * 処理対象のノードを翻訳して、翻訳後のノードを tnodes に入れる
    *
+   * @param ctx
    * @param result
    * @returns
    */
-  protected async translateNodes(result: IParseResult): Promise<void> {
+  protected async translateNodes(
+    ctx: IAppContext,
+    result: IParseResult
+  ): Promise<void> {
     for (const tnode of result.tnodes) {
       if (tnode.type !== 'text') {
         continue;
       }
       if (tnode.node.type === 'heading') {
         const translated = await this.translateHeadings(tnode.srcText);
+        const mdDoc = new MdDoc(
+          new MdDocId(ctx.file, ctx.nodeNo),
+          tnode.node.type,
+          tnode.srcText,
+          translated
+        );
+        await this.mdDocRepository.save(mdDoc);
         const root = this.processor.parse(translated);
         logger.debug('heading translated', JSON.stringify(root, null, 2));
         tnode.replaceNodes = root.children;
       } else if (tnode.node.type === 'paragraph') {
         const translated = await this.translateParagraph(tnode.srcText);
+        const mdDoc = new MdDoc(
+          new MdDocId(ctx.file, ctx.nodeNo),
+          tnode.node.type,
+          tnode.srcText,
+          translated
+        );
+        await this.mdDocRepository.save(mdDoc);
         if (translated != tnode.srcText) {
           const root = this.processor.parse(translated);
           logger.debug('paragraph translated', JSON.stringify(root, null, 2));
@@ -164,7 +189,6 @@ export class MdProcessorImpl implements IMdProcessor {
   }
 
   protected async translateHeadings(srcText: string): Promise<string> {
-    logger.verbose('translateHeadings', srcText);
     srcText = srcText.trim();
     const text = srcText.replace(/^#+\s*/g, '');
     const dstText = await this.translator.translate(text, true);
@@ -176,7 +200,6 @@ export class MdProcessorImpl implements IMdProcessor {
   }
 
   protected async translateParagraph(srcText: string): Promise<string> {
-    logger.verbose('translateParagraph', srcText);
     const dstText = await this.translator.translate(srcText, false);
     if (dstText === '') {
       return srcText;

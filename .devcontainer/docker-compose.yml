@@ -4,7 +4,7 @@ services:
   app:
     build:
       context: ..
-      dockerfile: .devcontainer/Dockerfile
+      dockerfile: .devcontainer/app/Dockerfile
     image: md-translation-gpt-app
     volumes:
       - ..:/app:cached
