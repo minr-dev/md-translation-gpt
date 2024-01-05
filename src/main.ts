@@ -8,6 +8,7 @@ import { FileWalker } from './useCases/file_walker.js';
 import { ProofreadTranslatorImpl } from './domain/services/impl/proofread_translator_impl.js';
 import { OpenAIModel } from './infra/llm/openai_model.js';
 import { MdDocRepositoryImpl } from './infra/vector/md_doc_repository_impl.js';
+import { MdHashRepositoryImpl } from './infra/json/md_hash_repository_impl.js';
 import { MdProcessorFactoryImpl } from './domain/services/impl/md_processor_factory_impl.js';
 
 const moduleDir = fileURLToPath(new URL('.', import.meta.url));
@@ -52,15 +53,19 @@ const program = new Command();
         if (Config.LANCEDB_DIR === '') {
           throw new Error('LANCEDB_DIR is not set');
         }
+        if (Config.JSON_DIR === '') {
+          throw new Error('JSON_DIR is not set');
+        }
         const llm = new OpenAIModel();
         const translator = new ProofreadTranslatorImpl(llm);
         const mdDocRepository = new MdDocRepositoryImpl();
+        const mdHashRepository = new MdHashRepositoryImpl();
         const mdProcessorFactory = new MdProcessorFactoryImpl(
           translator,
           mdDocRepository
         );
         const ctx = { file: '__test__.md', nodeNo: 1 };
-        const walker = new FileWalker(mdProcessorFactory);
+        const walker = new FileWalker(mdProcessorFactory, mdHashRepository);
         await walker.walk(
           ctx,
           request.pattern as string,

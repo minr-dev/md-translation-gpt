@@ -1,5 +1,5 @@
 # md-translation-gpt
 
 ```bash
-NODE_OPTIONS='--loader ts-node/esm' npx ts-node src/cli.ts -p "examples/src/**/evaluation/**/*.mdx" -o examples/dst
+time npm run dev -- -p "examples/src/langchain-full/**/*" -o examples/dst/langchain-full/ -d -a 0.95 > a.out 2>&1
 ```

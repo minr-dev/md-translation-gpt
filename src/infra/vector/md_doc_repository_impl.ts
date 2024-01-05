@@ -19,7 +19,6 @@ export class MdDocRepositoryImpl implements IMdDocRepository {
       pageContent: mdDoc.en,
     });
     await this.client.save(doc);
-    console.log('MdDocRepositoryImpl.save doc', doc);
   }
 
   async getByEn(en: string): Promise<MdDoc | undefined> {

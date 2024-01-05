@@ -1,3 +1,5 @@
+import { Entity } from './entity';
+
 export class MdDocId {
   constructor(
     readonly file: string,
@@ -9,9 +11,7 @@ export class MdDocId {
   }
 
   static fromString(text: string): MdDocId {
-    console.log('MdDocId.fromString', text);
     const matches = text.match(/^(.*):(\d+)$/);
-    console.log('matches', matches);
     if (!matches) {
       throw new Error(`Invalid MdDocId format: ${text}`);
     }
@@ -19,7 +19,7 @@ export class MdDocId {
   }
 }
 
-export class MdDoc {
+export class MdDoc implements Entity<MdDocId> {
   constructor(
     readonly id: MdDocId,
     readonly type: 'heading' | 'paragraph',

@@ -11,6 +11,7 @@ export const Config = {
   IS_VERBOSE: false,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
   LANCEDB_DIR: process.env.LANCEDB_DIR || '',
+  JSON_DIR: process.env.JSON_DIR || '',
 
   PINECONE_API_KEY: process.env.PINECONE_API_KEY || '',
   PINECONE_ENVIRONMENT: process.env.PINECONE_ENVIRONMENT || '',
