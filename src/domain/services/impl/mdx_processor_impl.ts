@@ -28,7 +28,7 @@ export class MdxProcessorImpl extends MdProcessorImpl {
       // Admonitions
       // https://docusaurus.io/docs/next/markdown-features/admonitions
       // 例: :::info
-      if (tnode.srcText.match(/^:::+(note|tips|info|warning|danger)/)) {
+      if (tnode.srcText.match(/^:::+(note|tips|info|warning|danger)?/)) {
         tnode.type = ':::';
         continue;
       }
@@ -45,33 +45,53 @@ export class MdxProcessorImpl extends MdProcessorImpl {
     for (const tnode of result.tnodes) {
       if (tnode.type === ':::') {
         let replaceNodes: RootContent[] = [];
-        let text = '';
-        const lines = tnode.srcText.split('\n');
-        for (const line of lines) {
-          if (line.match(/^:::/)) {
-            const nodes = await this.translateDocusaurusAdminition(ctx, text);
-            if (nodes) {
-              replaceNodes = replaceNodes.concat(nodes);
-            }
+        const matches1 = tnode.srcText.match(
+          /^(:::\S+\r?\n+)?(.+?)(:::\r?\n+)?/
+        );
+        if (matches1) {
+          const text = matches1[2];
+          const nodes = await this.translateDocusaurusAdminition(ctx, text);
+          if (nodes) {
             replaceNodes.push({
               type: 'paragraph',
               children: [
                 {
                   type: 'text',
-                  value: line,
+                  value: matches1[1],
                 } as Text,
               ],
             });
-            text = '';
-            continue;
+            replaceNodes = replaceNodes.concat(nodes);
+            if (matches1[3] && matches1[3].length > 0) {
+              replaceNodes.push({
+                type: 'paragraph',
+                children: [
+                  {
+                    type: 'text',
+                    value: matches1[3],
+                  } as Text,
+                ],
+              });
+            }
+          } else {
+            throw new Error('nodes is undefined');
           }
-          text += line;
+        } else {
+          const matches2 = tnode.srcText.match(/^(:::\r?\n+)/);
+          if (matches2) {
+            replaceNodes.push({
+              type: 'paragraph',
+              children: [
+                {
+                  type: 'text',
+                  value: matches2[1],
+                } as Text,
+              ],
+            });
+          } else {
+            throw new Error('nodes is undefined');
+          }
         }
-        const nodes = await this.translateDocusaurusAdminition(ctx, text);
-        if (nodes) {
-          replaceNodes = replaceNodes.concat(nodes);
-        }
-        tnode.replaceNodes = replaceNodes;
       }
     }
     await super.translateNodes(ctx, result);

@@ -108,6 +108,7 @@ ${srcLangTextDescription}
   ]);
 
   for (let i = 0; i < 5; i++) {
+    logger.verbose('chain loop count', i);
     let response;
     try {
       const chain = RunnableSequence.from([
@@ -146,6 +147,7 @@ ${srcLangTextDescription}
         logger.error('TimeoutError', e);
         continue;
       }
+      logger.error(e);
       throw e;
     }
   }
@@ -366,6 +368,7 @@ ${list}
   ]);
 
   for (let i = 0; i < 5; i++) {
+    logger.verbose('chain loop count', i);
     let response;
     try {
       response = await chain.invoke({
@@ -387,6 +390,7 @@ ${list}
         logger.error('TimeoutError', e);
         continue;
       }
+      logger.error(e);
       throw e;
     }
   }
