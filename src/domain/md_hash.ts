@@ -7,7 +7,6 @@ export class MdHash implements Entity<string> {
   ) {}
 
   get id(): string {
-    console.log('MdHash.id', this.file);
     return this.file;
   }
 

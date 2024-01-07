@@ -25,7 +25,11 @@ export class JsonClient<T extends Entity<string>> {
   async save(data: T): Promise<T> {
     await this.loadSession();
     this.putSession(data);
-    const text = JSON.stringify(this._rows, null, 2);
+    if (!this._rows) {
+      throw new Error('session is not loaded');
+    }
+    const values = Array.from(this._rows.values());
+    const text = JSON.stringify(values, null, 2);
 
     if (!fs.existsSync(this.jsonPath)) {
       const dir = path.dirname(this.jsonPath);
@@ -42,7 +46,6 @@ export class JsonClient<T extends Entity<string>> {
     if (!this._rows) {
       throw new Error('session is not loaded');
     }
-    console.log('putSession data.id', data.id, 'data', data);
     this._rows.set(data.id, data);
   }
 
@@ -53,10 +56,12 @@ export class JsonClient<T extends Entity<string>> {
     this._rows = new Map<string, T>();
     if (fs.existsSync(this.jsonPath)) {
       const text = fs.readFileSync(this.jsonPath, 'utf-8');
-      const data = JSON.parse(text);
-      for (const obj of data) {
-        const entity = this.factory.create(obj as Record<string, string>);
-        this.putSession(entity);
+      if (text && text.length > 0) {
+        const data = JSON.parse(text);
+        for (const obj of data) {
+          const entity = this.factory.create(obj as Record<string, string>);
+          this.putSession(entity);
+        }
       }
     }
     return Promise.resolve(this._rows);
