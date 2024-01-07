@@ -45,13 +45,13 @@ export const translateToJp = async (
   isTitleBlock: boolean
 ): Promise<JapaneseTranslated> => {
   logger.verbose('translateToJp', srcLangText);
-  let error = '';
+  let issues = '';
   if (cache.length > 0) {
     if (cache[0].correctness.proofreadType === 'proofread') {
-      error =
+      issues =
         '- 日本語に翻訳したあと、再度オリジナルと日本語訳を比較して、添削を行いました。以下は、その指摘です。この指摘に対応し、且つ、以前の翻訳と同じ翻訳はしないでください。\n';
     } else if (cache[0].correctness.proofreadType === 'reverse') {
-      error =
+      issues =
         '- 日本語に翻訳したあと、日本語から逆に英語に翻訳して、意味の一致を検証しています。以下は、以前に正しくないと判断された翻訳の指摘です。この指摘に対応し、且つ、以前の翻訳と同じ翻訳はしないでください。\n';
     } else {
       throw new Error(
@@ -59,10 +59,10 @@ export const translateToJp = async (
       );
     }
     for (const prev of cache) {
-      error += `    - \`${prev.japaneseTranslated.ja}\`と訳されましたが、\`${prev.correctness.error}\`と指摘されました。\n`;
+      issues += `    - \`${prev.japaneseTranslated.ja}\`と訳されましたが、\`${prev.correctness.error}\`と指摘されました。\n`;
     }
   }
-  logger.verbose('error: ', error);
+  logger.verbose('issues: ', issues);
   const srcLangTextDescription = isTitleBlock
     ? '- このテキストはタイトル行に使われています'
     : '';
@@ -73,6 +73,8 @@ langchainのマニュアルを翻訳します。以下の注意点を考慮し�
 - Max Marginal Relevance は、MMR（Max Marginal Relevance）と訳してください
 - 機能名やクラス名などは、訳することで、ニュアンスが損なわれる場合は、英語のままにしてください
 - オリジナルのテキストは、マークダウン書式です
+- \`![xxxx](yyyyyy)\` は、マークダウンのイメージ画像なので、日本語訳不要です。
+- 文中に "your secret key" などがある場合は、訳することなくそのままにしてください。シークレットキーは探索しないでください。
 
 ${srcLangTextDescription}
 {error}
@@ -106,6 +108,7 @@ ${srcLangTextDescription}
   ]);
 
   for (let i = 0; i < 5; i++) {
+    let response;
     try {
       const chain = RunnableSequence.from([
         chatPrompt,
@@ -114,7 +117,7 @@ ${srcLangTextDescription}
       ]);
       const variables = {
         srcLangText: srcLangText,
-        error: error,
+        error: issues,
         formatInstructions: formatInstructionsForStringParser,
       };
       dprintPrompt(
@@ -124,7 +127,7 @@ ${srcLangTextDescription}
         ],
         variables
       );
-      const response = await chain.invoke(variables);
+      response = await chain.invoke(variables);
       const result = JSON.parse(response) as JapaneseTranslated;
       if (!result.isJapanese && (!result.ja || result.ja === '')) {
         continue;
@@ -136,7 +139,11 @@ ${srcLangTextDescription}
         continue;
       }
       if (e instanceof SyntaxError) {
-        logger.error('SyntaxError', e);
+        logger.error('SyntaxError', e, response);
+        continue;
+      }
+      if (e instanceof Error && e.name === 'TimeoutError') {
+        logger.error('TimeoutError', e);
         continue;
       }
       throw e;
@@ -189,8 +196,9 @@ ${srcLangTextDescription}
   ]);
 
   for (let i = 0; i < 5; i++) {
+    let response;
     try {
-      const response = await chain.invoke({
+      response = await chain.invoke({
         jpText: jpText,
         formatInstructions: formatInstructionsForStringParser,
       });
@@ -202,6 +210,14 @@ ${srcLangTextDescription}
     } catch (e) {
       if (e instanceof OutputParserException) {
         logger.error('OutputParserException', e);
+        continue;
+      }
+      if (e instanceof SyntaxError) {
+        logger.error('SyntaxError', e, response);
+        continue;
+      }
+      if (e instanceof Error && e.name === 'TimeoutError') {
+        logger.error('TimeoutError', e);
         continue;
       }
       throw e;
@@ -267,8 +283,9 @@ ${srcLangTextDescription}
   ]);
 
   for (let i = 0; i < 5; i++) {
+    let response;
     try {
-      const response = await chain.invoke({
+      response = await chain.invoke({
         srcLangText: srcLangText,
         jpText: jpText,
         enText: enText,
@@ -279,6 +296,14 @@ ${srcLangTextDescription}
     } catch (e) {
       if (e instanceof OutputParserException) {
         logger.error('OutputParserException', e);
+        continue;
+      }
+      if (e instanceof SyntaxError) {
+        logger.error('SyntaxError', e, response);
+        continue;
+      }
+      if (e instanceof Error && e.name === 'TimeoutError') {
+        logger.error('TimeoutError', e);
         continue;
       }
       throw e;
@@ -341,8 +366,9 @@ ${list}
   ]);
 
   for (let i = 0; i < 5; i++) {
+    let response;
     try {
-      const response = await chain.invoke({
+      response = await chain.invoke({
         srcLangText: srcLangText,
         formatInstructions: formatInstructionsForStringParser,
       });
@@ -351,6 +377,14 @@ ${list}
     } catch (e) {
       if (e instanceof OutputParserException) {
         logger.error('OutputParserException', e);
+        continue;
+      }
+      if (e instanceof SyntaxError) {
+        logger.error('SyntaxError', e, response);
+        continue;
+      }
+      if (e instanceof Error && e.name === 'TimeoutError') {
+        logger.error('TimeoutError', e);
         continue;
       }
       throw e;

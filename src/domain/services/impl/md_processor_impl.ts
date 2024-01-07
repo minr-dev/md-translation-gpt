@@ -122,6 +122,11 @@ export class MdProcessorImpl implements IMdProcessor {
       if (tnode.type !== 'text') {
         continue;
       }
+      // イメージのリンクはイメージのバイナリデータが含まれていることがあるので、予め除外する
+      if (tnode.srcText.match(/^[!]\[.+?\]\(.*?\)/)) {
+        tnode.type = ':::';
+        continue;
+      }
       if (tnode.node.type === 'heading') {
         const translated = await this.translateHeadings(tnode.srcText);
         const mdDoc = new MdDoc(

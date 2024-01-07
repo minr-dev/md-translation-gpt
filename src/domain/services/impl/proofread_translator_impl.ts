@@ -103,6 +103,8 @@ history: ${JSON.stringify(histories, null, 2)}
 <Context>
 翻訳前のオリジナルの文章と、日本語訳を比較して、意味が同じになるように添削してください。
 - テキストは、マークダウン書式です。
+- \`![xxxx](yyyyyy)\` は、マークダウンのイメージ画像なので、日本語訳不要です。
+- 文中に "your secret key" などがある場合は、訳することなくそのままにしてください。シークレットキーは探索しないでください。
 ${srcLangTextDescription}
 
 添削の手順は、オリジナルと日本語訳との比較を、次のとおり行ってください。
@@ -149,6 +151,7 @@ ${srcLangTextDescription}
     ]);
 
     for (let i = 0; i < 5; i++) {
+      let response;
       try {
         const chain = RunnableSequence.from([
           chatPrompt,
@@ -168,7 +171,7 @@ ${srcLangTextDescription}
           ],
           variables
         );
-        const response = await chain.invoke(variables);
+        response = await chain.invoke(variables);
         const result = JSON.parse(response) as ProofreadResult;
         return result;
       } catch (e) {
@@ -177,7 +180,11 @@ ${srcLangTextDescription}
           continue;
         }
         if (e instanceof SyntaxError) {
-          logger.error('SyntaxError', e);
+          logger.error('SyntaxError', e, response);
+          continue;
+        }
+        if (e instanceof Error && e.name === 'TimeoutError') {
+          logger.error('TimeoutError', e);
           continue;
         }
         throw e;
