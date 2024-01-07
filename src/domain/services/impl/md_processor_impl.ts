@@ -123,7 +123,7 @@ export class MdProcessorImpl implements IMdProcessor {
         continue;
       }
       // イメージのリンクはイメージのバイナリデータが含まれていることがあるので、予め除外する
-      if (tnode.srcText.match(/^[!]\[.+?\]\(.*?\)/)) {
+      if (tnode.srcText.match(/^[!]\[.*?\]\(.*?\)/)) {
         tnode.type = ':::';
         continue;
       }
