@@ -131,10 +131,14 @@ ${srcLangTextDescription}
     const humanTemplate = `
 <Criteria>
 オリジナル:
+<en>
 {original}
+</en>
 
 日本語訳:
+<ja>
 {ja}
+</ja>
 
 {jaHistories}
 `;
@@ -142,7 +146,9 @@ ${srcLangTextDescription}
     let jaHistories = '';
     if (req.histories.length > 0) {
       jaHistories = '過去に問題指摘した訳:\n';
-      jaHistories += req.histories.map(h => `- ${h.jpText}`).join('\n');
+      jaHistories += req.histories
+        .map(h => `- <ja>${h.jpText}</ja>`)
+        .join('\n');
     }
 
     const chatPrompt = ChatPromptTemplate.fromMessages([

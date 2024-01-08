@@ -81,7 +81,7 @@ ${srcLangTextDescription}
 
 翻訳の手順は、次のとおり行ってください。処理過程の解説の出力は不要です。
 - オリジナルから日本語への翻訳を行う
-- オリジナルが不完全な英語でも、日本語に訳してください
+- オリジナルが不完全な英文でも、日本語に訳してください
 - 日本語訳された文章が日本語として理解可能なものにする
 - 日本語から英語への逆翻訳を行う
 - オリジナルと逆翻訳された英語を比較して、同じ意味になっているか確認する
@@ -99,7 +99,9 @@ ${srcLangTextDescription}
   const humanTemplate = `
 <Criteria>
 オリジナル:
+<en>
 {srcLangText}
+</en>
 `;
 
   const chatPrompt = ChatPromptTemplate.fromMessages([

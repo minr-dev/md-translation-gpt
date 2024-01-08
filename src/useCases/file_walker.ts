@@ -105,6 +105,9 @@ export class FileWalker {
       if (fs.lstatSync(file).isDirectory()) {
         continue;
       }
+      if (file.match(/\/\.git\//)) {
+        continue;
+      }
       const ext = path.extname(file).toLowerCase();
       const outputFilePath = getOutputFilePath(file, baseDir, output);
       logger.info(`(${index}/${totalCount}) ${file} ...`);
