@@ -31,7 +31,7 @@ export interface TranslateCache {
 }
 
 export const HHH_prompt = `<Introduction>
-あなたは、多言語のテクニカルライティングのAIアシスタントです。
+あなたは、システム開発にも精通する多言語のテクニカルライターのAIアシスタントです。
 AIは、親切で、丁寧で、正直で、洗練されていて、感情的で、謙虚で、でも知識が豊富であるように努めています。
 アシスタントは、ほとんど何でも喜んでお手伝いしますし、何が必要かを正確に理解するために最善を尽くします。
 また、誤った情報や誤解を招くような情報を与えないようにし、正しい答えが完全にわからない場合は、その旨を説明します。
@@ -40,53 +40,67 @@ AIは、親切で、丁寧で、正直で、洗練されていて、感情的で
 
 export const translateToJp = async (
   llm: ILLM,
-  srcLangText: string,
+  targetTextWithContext: string,
+  targetText: string,
   cache: TranslateCache[],
   isTitleBlock: boolean
 ): Promise<JapaneseTranslated> => {
-  logger.verbose('translateToJp', srcLangText);
+  logger.verbose('translateToJp', targetText);
+
+  const systemTemplate = `${HHH_prompt}
+`;
+
+  const humanTemplate = `<Context>
+以下は、langchainのマニュアルの一部です。これを日本語に意訳します。
+"""{targetTextWithContext}
+"""
+
+<Task>
+次の部分を日本語に意訳してください。
+"""{targetText}
+"""
+
+翻訳の手順は、次のとおり行ってください。
+- オリジナルから日本語への翻訳を行う
+- オリジナルが不完全な英文でも、日本語に訳してください
+- 日本語訳された文章が日本語として理解可能なものにする
+- 日本語から英語への逆翻訳を行う
+- オリジナルと逆翻訳された英語を比較して、同じ意味になっているか確認する
+
+{issues}
+
+翻訳時の注意点です。
+- Max Marginal Relevance は、MMR（Max Marginal Relevance）と訳してください
+- 機能名やクラス名などは、訳することで、ニュアンスが損なわれる場合は、英語のままにしてください
+- オリジナルのテキストは、マークダウン書式です
+- """![xxxx](yyyyyy)""" は、マークダウンのイメージ画像なので、日本語訳不要です。
+- 文中に """your secret key""" などがある場合は、訳することなくそのままにしてください。シークレットキーは探索しないでください。
+{targetTextDescription}
+{formatInstructionsForStringParser}
+`;
+
   let issues = '';
   if (cache.length > 0) {
     if (cache[0].correctness.proofreadType === 'proofread') {
       issues =
-        '- 日本語に翻訳したあと、再度オリジナルと日本語訳を比較して、添削を行いました。以下は、その指摘です。この指摘に対応し、且つ、以前の翻訳と同じ翻訳はしないでください。\n';
+        '日本語に翻訳したあと、再度オリジナルと日本語訳を比較して、添削を行いました。以下は、その指摘です。この指摘に対応し、且つ、以前の翻訳と同じ翻訳はしないでください。\n';
     } else if (cache[0].correctness.proofreadType === 'reverse') {
       issues =
-        '- 日本語に翻訳したあと、日本語から逆に英語に翻訳して、意味の一致を検証しています。以下は、以前に正しくないと判断された翻訳の指摘です。この指摘に対応し、且つ、以前の翻訳と同じ翻訳はしないでください。\n';
+        '日本語に翻訳したあと、日本語から逆に英語に翻訳して、意味の一致を検証しています。以下は、以前に正しくないと判断された翻訳の指摘です。この指摘に対応し、且つ、以前の翻訳と同じ翻訳はしないでください。\n';
     } else {
       throw new Error(
         `invalid proofreadType: ${cache[0].correctness.proofreadType}`
       );
     }
     for (const prev of cache) {
-      issues += `    - \`${prev.japaneseTranslated.ja}\`と訳されましたが、\`${prev.correctness.error}\`と指摘されました。\n`;
+      issues += `- """${prev.japaneseTranslated.ja}"""と訳されましたが、"""${prev.correctness.error}"""と指摘されました。\n`;
     }
   }
   logger.verbose('issues: ', issues);
-  const srcLangTextDescription = isTitleBlock
-    ? '- このテキストはタイトル行に使われています'
+
+  const targetTextDescription = isTitleBlock
+    ? '- 翻訳対象のテキストは見出しです。本文を含めて翻訳しないでください。見出しのみ翻訳してください。'
     : '';
-  const systemTemplate = `${HHH_prompt}
-
-<Context>
-langchainのマニュアルを翻訳します。以下の注意点を考慮して日本語に意訳してください。
-- Max Marginal Relevance は、MMR（Max Marginal Relevance）と訳してください
-- 機能名やクラス名などは、訳することで、ニュアンスが損なわれる場合は、英語のままにしてください
-- オリジナルのテキストは、マークダウン書式です
-- \`![xxxx](yyyyyy)\` は、マークダウンのイメージ画像なので、日本語訳不要です。
-- 文中に "your secret key" などがある場合は、訳することなくそのままにしてください。シークレットキーは探索しないでください。
-
-${srcLangTextDescription}
-{error}
-
-翻訳の手順は、次のとおり行ってください。処理過程の解説の出力は不要です。
-- オリジナルから日本語への翻訳を行う
-- オリジナルが不完全な英文でも、日本語に訳してください
-- 日本語訳された文章が日本語として理解可能なものにする
-- 日本語から英語への逆翻訳を行う
-- オリジナルと逆翻訳された英語を比較して、同じ意味になっているか確認する
-{formatInstructions}
-`;
 
   const stringParser = new StringOutputParser();
   // structuredParser.getFormatInstructions() を使うと英文が混ざるからか、responseのJSONが正しくないので、対処療法的だが日本語で作成する
@@ -96,13 +110,14 @@ ${srcLangTextDescription}
 - ja: 日本語訳
 - error: 翻訳が正しくできなかったときの理由
 `;
-  const humanTemplate = `
-<Criteria>
-オリジナル:
-<en>
-{srcLangText}
-</en>
-`;
+
+  const variables = {
+    targetTextWithContext: targetTextWithContext,
+    targetText: targetText,
+    targetTextDescription: targetTextDescription,
+    issues: issues,
+    formatInstructionsForStringParser: formatInstructionsForStringParser,
+  };
 
   const chatPrompt = ChatPromptTemplate.fromMessages([
     ['system', systemTemplate],
@@ -118,11 +133,6 @@ ${srcLangTextDescription}
         await llm.getModel(),
         stringParser,
       ]);
-      const variables = {
-        srcLangText: srcLangText,
-        error: issues,
-        formatInstructions: formatInstructionsForStringParser,
-      };
       dprintPrompt(
         [
           ['system', systemTemplate],
@@ -162,7 +172,7 @@ export const translateToEn = async (
   isTitleBlock: boolean
 ): Promise<ReverseTranslated> => {
   logger.verbose('translateToEn', jpText);
-  const srcLangTextDescription = isTitleBlock
+  const targetTextDescription = isTitleBlock
     ? '- このテキストはタイトル行に使われています'
     : '';
   const systemTemplate = `${HHH_prompt}
@@ -170,7 +180,7 @@ export const translateToEn = async (
 <Context>
 langchainのマニュアルを翻訳します。
 日本語に意訳したものを、再度、英語に意訳してください。
-${srcLangTextDescription}
+${targetTextDescription}
 - テキストは、マークダウン書式です
 - 与えられた日本語が不完全でも、英語に意訳してください
 - 意訳した結果は必ず JSON のみで返してください
@@ -232,14 +242,14 @@ ${srcLangTextDescription}
 
 export const checkTranslated = async (
   llm: ILLM,
-  srcLangText: string,
+  targetText: string,
   jpText: string,
   enText: string,
   isTitleBlock: boolean
 ): Promise<TranslateCorrectness> => {
-  logger.verbose('checkTranslated', srcLangText, jpText, enText);
+  logger.verbose('checkTranslated', targetText, jpText, enText);
 
-  const srcLangTextDescription = isTitleBlock
+  const targetTextDescription = isTitleBlock
     ? '- このテキストはタイトル行に使われています'
     : '';
   const systemTemplate = `${HHH_prompt}
@@ -250,7 +260,7 @@ langchainのマニュアルを翻訳結果を評価します。
 その日本語訳をさらに英語に逆翻訳した文章を提示します。
 オリジナルと逆翻訳の文章を比較して、同じ意味になっているか確認してください。
 テキストは、マークダウン書式です。
-${srcLangTextDescription}
+${targetTextDescription}
 
 {formatInstructions}
 `;
@@ -266,7 +276,7 @@ ${srcLangTextDescription}
   const humanTemplate = `
 <Criteria>
 オリジナル:
-{srcLangText}
+{targetText}
 
 日本語:
 {jpText}
@@ -290,7 +300,7 @@ ${srcLangTextDescription}
     let response;
     try {
       response = await chain.invoke({
-        srcLangText: srcLangText,
+        targetText: targetText,
         jpText: jpText,
         enText: enText,
         formatInstructions: formatInstructionsForStringParser,
@@ -318,13 +328,13 @@ ${srcLangTextDescription}
 
 export const choiceTranslation = async (
   llm: ILLM,
-  srcLangText: string,
+  targetText: string,
   cache: TranslateCache[],
   isTitleBlock: boolean
 ): Promise<TranslateChoice> => {
   logger.verbose('choiceTranslation', cache, isTitleBlock);
 
-  const srcLangTextDescription = isTitleBlock
+  const targetTextDescription = isTitleBlock
     ? '- このテキストはタイトル行に使われています'
     : '';
   const systemTemplate = `${HHH_prompt}
@@ -332,7 +342,7 @@ export const choiceTranslation = async (
 <Context>
 翻訳前のオリジナルの文章と、翻訳結果を比較して、最も適した意訳分を選択してください。
 テキストは、マークダウン書式です。
-${srcLangTextDescription}
+${targetTextDescription}
 
 {formatInstructions}
 `;
@@ -352,7 +362,7 @@ ${srcLangTextDescription}
   const humanTemplate = `
 <Criteria>
 オリジナル:
-{srcLangText}
+{targetText}
 
 翻訳結果:
 ${list}
@@ -374,7 +384,7 @@ ${list}
     let response;
     try {
       response = await chain.invoke({
-        srcLangText: srcLangText,
+        targetText: targetText,
         formatInstructions: formatInstructionsForStringParser,
       });
       const result: TranslateChoice = JSON.parse(response);

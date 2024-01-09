@@ -1,3 +1,7 @@
 export interface ITranslator {
-  translate(srcLangText: string, isTitleBlock: boolean): Promise<string>;
+  translate(
+    targetTextWithContext: string,
+    targetText: string,
+    isTitleBlock: boolean
+  ): Promise<string>;
 }

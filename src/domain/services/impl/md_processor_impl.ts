@@ -3,6 +3,8 @@ import { Parent, Blockquote, RootContent } from 'mdast';
 import frontmatter from 'remark-frontmatter';
 import stringify from 'remark-stringify';
 import { Root } from 'remark-parse/lib/index.js';
+import { createByModelName, TikTokenizer } from '@microsoft/tiktokenizer';
+
 import { logger } from '../../../shared/logger.js';
 import { IMdProcessor } from '../md_processor.js';
 import { ITranslator } from '../translator.js';
@@ -10,7 +12,18 @@ import { IAppContext } from '../../../shared/app_context.js';
 import { MdDoc, MdDocId } from '../../md_doc.js';
 import { IMdDocRepository } from '../../repository/md_doc_repository.js';
 
+let tokenizer: TikTokenizer | undefined = undefined;
+
+const countToken = async (text: string): Promise<number> => {
+  if (!tokenizer) {
+    tokenizer = await createByModelName('gpt-3.5-turbo');
+  }
+  const tokens = tokenizer.encode(text);
+  return tokens.length;
+};
+
 export interface IParseResult {
+  md: string;
   ast: Root;
   tnodes: ITargetNode[];
 }
@@ -18,28 +31,29 @@ export interface IParseResult {
 export interface ITargetNode {
   node: Parent;
   parent: Parent;
-  srcText: string;
+  targetTextWithContext: string;
+  targetText: string;
   replaceNodes?: RootContent[];
   type: 'text' | ':::';
 }
 
-const visitWithParent = (
+const visitWithParent = async (
   tree: Parent,
-  callback: (node: Parent, parent: Parent | null) => void
+  callback: (node: Parent, parent: Parent | null) => Promise<void>
 ) => {
-  visitParent(tree, null, callback);
+  await visitParent(tree, null, callback);
 };
 
-const visitParent = (
+const visitParent = async (
   node: Parent,
   parent: Parent | null,
-  callback: (node: Parent, parent: Parent | null) => void
+  callback: (node: Parent, parent: Parent | null) => Promise<void>
 ) => {
-  callback(node, parent);
+  await callback(node, parent);
 
   if (node.children) {
     for (const child of node.children) {
-      visitParent(child as Parent, node, callback);
+      await visitParent(child as Parent, node, callback);
     }
   }
 };
@@ -83,7 +97,7 @@ export class MdProcessorImpl implements IMdProcessor {
     const ast = this.processor.parse(md);
     logger.debug('ast', JSON.stringify(ast, null, 2));
     const tnodes: ITargetNode[] = [];
-    visitWithParent(ast, (node, parent) => {
+    await visitWithParent(ast, async (node, parent) => {
       if (!('type' in node)) {
         return;
       }
@@ -92,19 +106,74 @@ export class MdProcessorImpl implements IMdProcessor {
           // heading や paragraph の上位層には root が必ずあるので parent が null の状態はない
           throw new Error(`parent is null: ${JSON.stringify(node)}`);
         }
-        const srcText = this.processor.stringify(node as Root);
+        if (!node.position) {
+          // 手づくりでnodeを使ったのではなくて、mdをparseした結果のnodeなので、positionはあるはず
+          throw new Error(`node.position is null: ${JSON.stringify(node)}`);
+        }
+        const targetText = this.processor.stringify(node as Root);
+        const targetTextWithContext = await this.makeTargetTextWithContext(
+          md,
+          node
+        );
         tnodes.push({
           node: node,
           parent: parent,
-          srcText: srcText,
+          targetTextWithContext: targetTextWithContext,
+          targetText: targetText,
           type: 'text',
         });
       }
     });
-    return Promise.resolve({
+    return {
+      md: md,
       ast: ast,
       tnodes: tnodes,
-    });
+    };
+  }
+
+  protected async makeTargetTextWithContext(
+    md: string,
+    node: Parent
+  ): Promise<string> {
+    if (
+      !node.position ||
+      node.position.start.offset === undefined ||
+      node.position.end.offset === undefined
+    ) {
+      // 手づくりでnodeを使ったのではなくて、mdをparseした結果のnodeなので、positionはあるはず
+      throw new Error(`node.position is null: ${JSON.stringify(node)}`);
+    }
+    const MAX_TOKENS = 500;
+    const MIN_APPEND_TOKENS = MAX_TOKENS / 5;
+    let start = node.position.start.offset;
+    let end = node.position.end.offset;
+    const eot = md.length;
+    let targetTextWithContext = md.substring(start, end);
+    let tokens = await countToken(md.substring(start, end));
+    while (tokens < MAX_TOKENS) {
+      if (start === 0 && end === eot) {
+        break;
+      }
+      let append = Math.floor((MAX_TOKENS - tokens) / 2);
+      if (append < MIN_APPEND_TOKENS) {
+        append = MIN_APPEND_TOKENS;
+      }
+      if (start > 0) {
+        start -= append;
+        if (start < 0) {
+          start = 0;
+        }
+      }
+      if (end < eot) {
+        end += append;
+        if (end > eot) {
+          end = eot;
+        }
+      }
+      targetTextWithContext = md.substring(start, end);
+      tokens = await countToken(targetTextWithContext);
+    }
+    return targetTextWithContext;
   }
 
   /**
@@ -123,16 +192,16 @@ export class MdProcessorImpl implements IMdProcessor {
         continue;
       }
       // イメージのリンクはイメージのバイナリデータが含まれていることがあるので、予め除外する
-      if (tnode.srcText.match(/^[!]\[.*?\]\(.*?\)/)) {
+      if (tnode.targetText.match(/^[!]\[.*?\]\(.*?\)/)) {
         tnode.type = ':::';
         continue;
       }
       if (tnode.node.type === 'heading') {
-        const translated = await this.translateHeadings(tnode.srcText);
+        const translated = await this.translateHeadings(tnode);
         const mdDoc = new MdDoc(
           new MdDocId(ctx.file, ctx.nodeNo),
           tnode.node.type,
-          tnode.srcText,
+          tnode.targetText,
           translated
         );
         await this.mdDocRepository.save(mdDoc);
@@ -140,15 +209,15 @@ export class MdProcessorImpl implements IMdProcessor {
         logger.debug('heading translated', JSON.stringify(root, null, 2));
         tnode.replaceNodes = root.children;
       } else if (tnode.node.type === 'paragraph') {
-        const translated = await this.translateParagraph(tnode.srcText);
+        const translated = await this.translateParagraph(tnode);
         const mdDoc = new MdDoc(
           new MdDocId(ctx.file, ctx.nodeNo),
           tnode.node.type,
-          tnode.srcText,
+          tnode.targetText,
           translated
         );
         await this.mdDocRepository.save(mdDoc);
-        if (translated != tnode.srcText) {
+        if (translated != tnode.targetText) {
           const root = this.processor.parse(translated);
           logger.debug('paragraph translated', JSON.stringify(root, null, 2));
           tnode.replaceNodes = root.children.concat([
@@ -193,23 +262,31 @@ export class MdProcessorImpl implements IMdProcessor {
     return Promise.resolve(md);
   }
 
-  protected async translateHeadings(srcText: string): Promise<string> {
-    srcText = srcText.trim();
+  protected async translateHeadings(tnode: ITargetNode): Promise<string> {
+    const srcText = tnode.targetText.trim();
     const text = srcText.replace(/^#+\s*/g, '');
-    const dstText = await this.translator.translate(text, true);
-    if (dstText === '') {
+    const dstText = await this.translator.translate(
+      tnode.targetTextWithContext,
+      text,
+      true
+    );
+    if (dstText === '' || srcText === dstText) {
       return srcText;
     } else {
       return `${srcText} | ${dstText}`;
     }
   }
 
-  protected async translateParagraph(srcText: string): Promise<string> {
-    const dstText = await this.translator.translate(srcText, false);
+  protected async translateParagraph(tnode: ITargetNode): Promise<string> {
+    const dstText = await this.translator.translate(
+      tnode.targetTextWithContext,
+      tnode.targetText,
+      false
+    );
     if (dstText === '') {
-      return srcText;
-    } else if (dstText === srcText) {
-      return srcText;
+      return tnode.targetText;
+    } else if (dstText === tnode.targetText) {
+      return tnode.targetText;
     } else {
       return dstText;
     }

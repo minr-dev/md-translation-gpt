@@ -23,7 +23,11 @@ export interface TranslateChoice {
 export class ReverseCheckTranslatorImpl implements ITranslator {
   constructor(private llm: ILLM) {}
 
-  async translate(srcLangText: string, isTitleBlock: boolean): Promise<string> {
+  async translate(
+    paragraphText: string,
+    srcLangText: string,
+    isTitleBlock: boolean
+  ): Promise<string> {
     logger.verbose('ReverseCheckTranslatorImpl.translate', srcLangText);
     for (let retryCorrectness = 0; retryCorrectness < 5; retryCorrectness++) {
       const caches: TranslateCache[] = [];
@@ -32,6 +36,7 @@ export class ReverseCheckTranslatorImpl implements ITranslator {
         logger.verbose('translation attempts count', i);
         const jpResponse = await translateToJp(
           this.llm,
+          paragraphText,
           srcLangText,
           caches,
           isTitleBlock
