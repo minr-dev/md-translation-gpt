@@ -13,18 +13,11 @@ import { MdHash } from '../domain/md_hash.js';
 /**
  * 翻訳結果をファイルに書き込む
  *
- * 翻訳後のファイルがあれば、元のファイルを .bk でバックアップする
- * すでに .bk がある場合は、上書きしない
- *
  * @param file ファイル名
  * @param text 翻訳結果
  */
 const writeTranslatedMd = (file: string, text: string): void => {
   logger.verbose('writeTranslatedMd', text);
-  if (fs.existsSync(file)) {
-    const backupFile = file + '.bk';
-    fs.renameSync(file, backupFile);
-  }
   // ディレクトリがない場合は作成する
   const dir = path.dirname(file);
   if (!fs.existsSync(dir)) {
