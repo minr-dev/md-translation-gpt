@@ -1,3 +1,4 @@
+import { logger } from '../../../shared/logger.js';
 import { IAppContext } from '../../../shared/app_context.js';
 import { MdDoc, MdDocId } from '../../md_doc.js';
 import {
@@ -34,7 +35,7 @@ export class MdxProcessorImpl extends MdProcessorImpl {
       // Admonitions
       // https://docusaurus.io/docs/next/markdown-features/admonitions
       // 例: :::info
-      if (tnode.targetText.match(/^:::+(note|tips|info|warning|danger)?/)) {
+      if (tnode.targetText.match(/^:::+(\S+)?/)) {
         tnode.type = ':::';
         continue;
       }
@@ -49,60 +50,56 @@ export class MdxProcessorImpl extends MdProcessorImpl {
     result: IParseResult
   ): Promise<void> {
     for (const tnode of result.tnodes) {
-      if (tnode.type === ':::') {
-        let replaceNodes: RootContent[] = [];
-        const matches1 = tnode.targetText.match(
-          /^(:::\S+\r?\n+)?(.+?)(:::\r?\n+)?/
-        );
-        if (matches1) {
-          const text = matches1[2];
-          const nodes = await this.translateDocusaurusAdminition(
-            ctx,
-            tnode,
-            text
-          );
-          if (nodes) {
-            replaceNodes.push({
-              type: 'paragraph',
-              children: [
-                {
-                  type: 'text',
-                  value: matches1[1],
-                } as Text,
-              ],
-            });
-            replaceNodes = replaceNodes.concat(nodes);
-            if (matches1[3] && matches1[3].length > 0) {
-              replaceNodes.push({
-                type: 'paragraph',
-                children: [
-                  {
-                    type: 'text',
-                    value: matches1[3],
-                  } as Text,
-                ],
-              });
+      if (tnode.type !== ':::') {
+        continue;
+      }
+      logger.verbose('MdProcessor.process');
+      let replaceNodes: RootContent[] = [];
+      const lines = tnode.targetText.split(/\r?\n/);
+      let text = '';
+      for (const line of lines) {
+        const admonitionsMaches = line.match(/^:::(\S+)?/);
+        if (admonitionsMaches) {
+          // admonitions の終わりの行で、且つ、text が空でないときに翻訳する
+          if (!admonitionsMaches[1] && text.trim() !== '') {
+            const nodes = await this.translateDocusaurusAdminition(
+              ctx,
+              tnode,
+              text
+            );
+            if (nodes) {
+              replaceNodes = replaceNodes.concat(nodes);
+            } else {
+              throw new Error('nodes is undefined');
             }
-          } else {
-            throw new Error('nodes is undefined');
           }
+          replaceNodes.push({
+            type: 'paragraph',
+            children: [
+              {
+                type: 'text',
+                value: line,
+              } as Text,
+            ],
+          });
+          text = '';
+          continue;
+        }
+        text += line + '\n';
+      }
+      if (text.trim() !== '') {
+        const nodes = await this.translateDocusaurusAdminition(
+          ctx,
+          tnode,
+          text
+        );
+        if (nodes) {
+          replaceNodes = replaceNodes.concat(nodes);
         } else {
-          const matches2 = tnode.targetText.match(/^(:::\r?\n+)/);
-          if (matches2) {
-            replaceNodes.push({
-              type: 'paragraph',
-              children: [
-                {
-                  type: 'text',
-                  value: matches2[1],
-                } as Text,
-              ],
-            });
-          } else {
-            throw new Error('nodes is undefined');
-          }
+          throw new Error('nodes is undefined');
         }
       }
+      tnode.replaceNodes = replaceNodes;
     }
     await super.translateNodes(ctx, result);
   }

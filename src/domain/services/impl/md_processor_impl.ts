@@ -4,6 +4,8 @@ import frontmatter from 'remark-frontmatter';
 import stringify from 'remark-stringify';
 import { Root } from 'remark-parse/lib/index.js';
 import { createByModelName, TikTokenizer } from '@microsoft/tiktokenizer';
+import { Document } from 'langchain/document';
+import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 
 import { logger } from '../../../shared/logger.js';
 import { IMdProcessor } from '../md_processor.js';
@@ -34,7 +36,7 @@ export interface ITargetNode {
   targetTextWithContext: string;
   targetText: string;
   replaceNodes?: RootContent[];
-  type: 'text' | ':::';
+  type: 'text' | 'text-chunk' | ':::';
 }
 
 const visitWithParent = async (
@@ -115,6 +117,30 @@ export class MdProcessorImpl implements IMdProcessor {
           md,
           node
         );
+        const MAX_CHUNK_SIZE = 1000;
+        // paragraph の場合、テキストが長い可能性があり、max_tokens を超えてしまうので、
+        // 分割して処理する。分割方法は、1000文字をMAXとして行で分割する。
+        if (node.type === 'paragraph' && targetText.length > MAX_CHUNK_SIZE) {
+          const splitter = new RecursiveCharacterTextSplitter({
+            chunkSize: MAX_CHUNK_SIZE,
+            chunkOverlap: 0,
+            keepSeparator: true,
+            separators: ['\n', ''],
+          });
+          const docs = await splitter.splitDocuments([
+            new Document({ pageContent: targetText }),
+          ]);
+          for (const doc of docs) {
+            tnodes.push({
+              node: node,
+              parent: parent,
+              targetTextWithContext: targetTextWithContext,
+              targetText: doc.pageContent,
+              type: 'text-chunk',
+            });
+          }
+          return;
+        }
         tnodes.push({
           node: node,
           parent: parent,
@@ -187,14 +213,27 @@ export class MdProcessorImpl implements IMdProcessor {
     ctx: IAppContext,
     result: IParseResult
   ): Promise<void> {
+    let chunkTnode: ITargetNode | undefined = undefined;
+    let translatedChunks: string[] = [];
     for (const tnode of result.tnodes) {
-      if (tnode.type !== 'text') {
+      if (tnode.type !== 'text' && tnode.type !== 'text-chunk') {
         continue;
       }
       // イメージのリンクはイメージのバイナリデータが含まれていることがあるので、予め除外する
       if (tnode.targetText.match(/^[!]\[.*?\]\(.*?\)/)) {
         tnode.type = ':::';
         continue;
+      }
+      if (chunkTnode && tnode.type !== 'text-chunk') {
+        const translated = translatedChunks.join('\n');
+        if (translated != chunkTnode.targetText) {
+          this.makeParagraphReplaceNodes(translated, tnode);
+        }
+        chunkTnode = undefined;
+      }
+      if (tnode.type === 'text-chunk' && !chunkTnode) {
+        chunkTnode = tnode;
+        translatedChunks = [];
       }
       if (tnode.node.type === 'heading') {
         const translated = await this.translateHeadings(tnode);
@@ -217,21 +256,52 @@ export class MdProcessorImpl implements IMdProcessor {
           translated
         );
         await this.mdDocRepository.save(mdDoc);
-        if (translated != tnode.targetText) {
-          const root = this.processor.parse(translated);
-          logger.debug('paragraph translated', JSON.stringify(root, null, 2));
-          tnode.replaceNodes = root.children.concat([
-            {
-              type: 'blockquote',
-              children: [tnode.node],
-            } as Blockquote,
-          ]);
+        if (tnode.type === 'text-chunk') {
+          // markdownの表が分割されていると、空白行が入ってしまうと、レイアウトが壊れてしまうので、
+          // 翻訳前と後で、文末が改行なのか、改行以外かを合わせておく
+          // translated と tnode.targetText の最後の1文字を比較して、もしも、translated の方にだけ改行がある場合は除去する
+          const lastChar = translated.slice(-1);
+          if (lastChar === '\n' && tnode.targetText.slice(-1) !== lastChar) {
+            translatedChunks.push(translated.slice(0, -1));
+          } else {
+            translatedChunks.push(translated);
+          }
+        } else {
+          this.makeParagraphReplaceNodes(translated, tnode);
         }
       } else {
         throw new Error(`unknown node type: ${JSON.stringify(tnode.node)}`);
       }
     }
+    if (chunkTnode) {
+      const translated = translatedChunks.join('\n');
+      if (translated != chunkTnode.targetText) {
+        this.makeParagraphReplaceNodes(translated, chunkTnode);
+      }
+      chunkTnode = undefined;
+    }
     logger.debug('tnodes', JSON.stringify(result.tnodes, null, 2));
+  }
+
+  /**
+   * 翻訳結果で、置き替えようの node を作って、tnode.replaceNodes にセットする
+   *
+   * 原文も、blockquote で囲んで、翻訳結果の次の node として追加する
+   *
+   * @param translated
+   * @param tnode
+   */
+  protected makeParagraphReplaceNodes(
+    translated: string,
+    tnode: ITargetNode
+  ): void {
+    const translatedRoot = this.processor.parse(translated);
+    tnode.replaceNodes = translatedRoot.children.concat([
+      {
+        type: 'blockquote',
+        children: [tnode.node],
+      } as Blockquote,
+    ]);
   }
 
   /**
