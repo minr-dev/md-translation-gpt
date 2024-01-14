@@ -4,10 +4,11 @@ import { MdxProcessorImpl } from './mdx_processor_impl.js';
 import { MdProcessorImpl } from './md_processor_impl.js';
 import { ITranslator } from '../translator.js';
 import { IMdDocRepository } from '../../repository/md_doc_repository.js';
+import { EtojInput } from '../translator/etoj_prompts.js';
 
 export class MdProcessorFactoryImpl implements IMdProcessorFactory {
   constructor(
-    private translator: ITranslator,
+    private translator: ITranslator<EtojInput, string>,
     private mdDocRepository: IMdDocRepository
   ) {}
 

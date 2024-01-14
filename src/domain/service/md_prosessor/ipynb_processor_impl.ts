@@ -1,5 +1,5 @@
 import { logger } from '../../../shared/logger.js';
-import { IAppContext } from '../../../shared/app_context.js';
+import { AppContext } from '../../../shared/app_context.js';
 import { IMdProcessor } from '../md_processor.js';
 
 export class IpynbProcessorImpl implements IMdProcessor {
@@ -11,7 +11,7 @@ export class IpynbProcessorImpl implements IMdProcessor {
    * @param file ファイル名
    * @returns 翻訳後の md
    */
-  async process(ctx: IAppContext, data: string): Promise<string> {
+  async process(ctx: AppContext, data: string): Promise<string> {
     logger.verbose('IpynbProcessor.process');
     const json = JSON.parse(data);
     const cells = json.cells;

@@ -5,9 +5,9 @@ import fs from 'fs';
 import * as crypto from 'crypto';
 import { logger } from '../shared/logger.js';
 import { Config } from '../shared/config.js';
-import { IMdProcessorFactory } from '../domain/services/md_processor.js';
+import { IMdProcessorFactory } from '../domain/service/md_processor.js';
 import { IMdHashRepository } from '../domain/repository/md_hash_repository.js';
-import { IAppContext } from '../shared/app_context.js';
+import { AppContext } from '../shared/app_context.js';
 import { MdHash } from '../domain/md_hash.js';
 
 /**
@@ -87,7 +87,7 @@ export class FileWalker {
    * @param pattern glob パターン
    * @param output 出力先ディレクトリ
    */
-  async walk(ctx: IAppContext, pattern: string, output: string): Promise<void> {
+  async walk(ctx: AppContext, pattern: string, output: string): Promise<void> {
     logger.verbose('pattern', pattern);
     const files = glob.globSync(pattern);
     const baseDir = getBaseDir(pattern);

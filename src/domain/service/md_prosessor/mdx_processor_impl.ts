@@ -1,5 +1,5 @@
 import { logger } from '../../../shared/logger.js';
-import { IAppContext } from '../../../shared/app_context.js';
+import { AppContext } from '../../../shared/app_context.js';
 import { MdDoc, MdDocId } from '../../md_doc.js';
 import {
   IParseResult,
@@ -46,7 +46,7 @@ export class MdxProcessorImpl extends MdProcessorImpl {
   }
 
   protected async translateNodes(
-    ctx: IAppContext,
+    ctx: AppContext,
     result: IParseResult
   ): Promise<void> {
     for (const tnode of result.tnodes) {
@@ -105,7 +105,7 @@ export class MdxProcessorImpl extends MdProcessorImpl {
   }
 
   private async translateDocusaurusAdminition(
-    ctx: IAppContext,
+    ctx: AppContext,
     tnode: ITargetNode,
     text: string
   ): Promise<RootContent[] | undefined> {
@@ -117,7 +117,7 @@ export class MdxProcessorImpl extends MdProcessorImpl {
     const newTnode = Object.assign({}, tnode);
     newTnode.targetText = text;
 
-    const translated = await this.translateParagraph(newTnode);
+    const translated = await this.translateParagraph(ctx, newTnode);
     const mdDoc = new MdDoc(
       new MdDocId(ctx.file, ctx.nodeNo),
       'paragraph',

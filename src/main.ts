@@ -5,11 +5,12 @@ import { fileURLToPath } from 'url';
 import { logger, LogLevel } from './shared/logger.js';
 import { Config } from './shared/config.js';
 import { FileWalker } from './useCases/file_walker.js';
-import { ProofreadTranslatorImpl } from './domain/services/impl/proofread_translator_impl.js';
 import { OpenAIModel } from './infra/llm/openai_model.js';
 import { MdDocRepositoryImpl } from './infra/vector/md_doc_repository_impl.js';
 import { MdHashRepositoryImpl } from './infra/json/md_hash_repository_impl.js';
-import { MdProcessorFactoryImpl } from './domain/services/impl/md_processor_factory_impl.js';
+import { MdProcessorFactoryImpl } from './domain/service/md_prosessor/md_processor_factory_impl.js';
+import { ProofreadTranslatorImpl } from './domain/service/translator/proofread_translator_impl.js';
+import { AppContext } from './shared/app_context.js';
 
 const moduleDir = fileURLToPath(new URL('.', import.meta.url));
 
@@ -64,7 +65,7 @@ const program = new Command();
           translator,
           mdDocRepository
         );
-        const ctx = { file: '__test__.md', nodeNo: 1 };
+        const ctx = AppContext.init();
         const walker = new FileWalker(mdProcessorFactory, mdHashRepository);
         await walker.walk(
           ctx,

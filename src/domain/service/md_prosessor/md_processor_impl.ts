@@ -10,9 +10,10 @@ import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
 import { logger } from '../../../shared/logger.js';
 import { IMdProcessor } from '../md_processor.js';
 import { ITranslator } from '../translator.js';
-import { IAppContext } from '../../../shared/app_context.js';
+import { AppContext } from '../../../shared/app_context.js';
 import { MdDoc, MdDocId } from '../../md_doc.js';
 import { IMdDocRepository } from '../../repository/md_doc_repository.js';
+import { EtojInput } from '../translator/etoj_prompts.js';
 
 let tokenizer: TikTokenizer | undefined = undefined;
 
@@ -73,11 +74,11 @@ export class MdProcessorImpl implements IMdProcessor {
   protected processor = remark().use(frontmatter, ['yaml']).use(stringify);
 
   constructor(
-    protected translator: ITranslator,
+    protected translator: ITranslator<EtojInput, string>,
     protected mdDocRepository: IMdDocRepository
   ) {}
 
-  async process(ctx: IAppContext, data: string): Promise<string> {
+  async process(ctx: AppContext, data: string): Promise<string> {
     logger.verbose('MdProcessor.process');
     const result = await this.parseMd(data);
     await this.translateNodes(ctx, result);
@@ -210,7 +211,7 @@ export class MdProcessorImpl implements IMdProcessor {
    * @returns
    */
   protected async translateNodes(
-    ctx: IAppContext,
+    ctx: AppContext,
     result: IParseResult
   ): Promise<void> {
     let chunkTnode: ITargetNode | undefined = undefined;
@@ -236,7 +237,7 @@ export class MdProcessorImpl implements IMdProcessor {
         translatedChunks = [];
       }
       if (tnode.node.type === 'heading') {
-        const translated = await this.translateHeadings(tnode);
+        const translated = await this.translateHeadings(ctx, tnode);
         const mdDoc = new MdDoc(
           new MdDocId(ctx.file, ctx.nodeNo),
           tnode.node.type,
@@ -248,7 +249,7 @@ export class MdProcessorImpl implements IMdProcessor {
         logger.debug('heading translated', JSON.stringify(root, null, 2));
         tnode.replaceNodes = root.children;
       } else if (tnode.node.type === 'paragraph') {
-        const translated = await this.translateParagraph(tnode);
+        const translated = await this.translateParagraph(ctx, tnode);
         const mdDoc = new MdDoc(
           new MdDocId(ctx.file, ctx.nodeNo),
           tnode.node.type,
@@ -332,14 +333,17 @@ export class MdProcessorImpl implements IMdProcessor {
     return Promise.resolve(md);
   }
 
-  protected async translateHeadings(tnode: ITargetNode): Promise<string> {
+  protected async translateHeadings(
+    ctx: AppContext,
+    tnode: ITargetNode
+  ): Promise<string> {
     const srcText = tnode.targetText.trim();
     const text = srcText.replace(/^#+\s*/g, '');
-    const dstText = await this.translator.translate(
-      tnode.targetTextWithContext,
-      text,
-      true
-    );
+    const dstText = await this.translator.translate(ctx, {
+      targetTextWithContext: tnode.targetTextWithContext,
+      targetText: text,
+      isTitleBlock: true,
+    });
     if (dstText === '' || srcText === dstText) {
       return srcText;
     } else {
@@ -347,12 +351,15 @@ export class MdProcessorImpl implements IMdProcessor {
     }
   }
 
-  protected async translateParagraph(tnode: ITargetNode): Promise<string> {
-    const dstText = await this.translator.translate(
-      tnode.targetTextWithContext,
-      tnode.targetText,
-      false
-    );
+  protected async translateParagraph(
+    ctx: AppContext,
+    tnode: ITargetNode
+  ): Promise<string> {
+    const dstText = await this.translator.translate(ctx, {
+      targetTextWithContext: tnode.targetTextWithContext,
+      targetText: tnode.targetText,
+      isTitleBlock: false,
+    });
     if (dstText === '') {
       return tnode.targetText;
     } else if (dstText === tnode.targetText) {

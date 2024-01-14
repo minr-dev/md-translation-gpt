@@ -1,7 +1,7 @@
-import { IAppContext } from '../../shared/app_context.js';
+import { AppContext } from '../../shared/app_context.js';
 
 export interface IMdProcessor {
-  process(ctx: IAppContext, text: string): Promise<string>;
+  process(ctx: AppContext, text: string): Promise<string>;
 }
 
 export interface IMdProcessorFactory {
