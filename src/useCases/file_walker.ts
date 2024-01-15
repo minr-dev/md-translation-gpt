@@ -90,7 +90,7 @@ export class FileWalker {
   async walk(ctx: AppContext, pattern: string, output: string): Promise<void> {
     logger.verbose('pattern', pattern);
     const files = glob.globSync(pattern);
-    const baseDir = getBaseDir(pattern);
+    const srcBaseDir = getBaseDir(pattern);
     const totalCount = files.length;
     let index = 0;
     for (const file of files) {
@@ -102,7 +102,7 @@ export class FileWalker {
         continue;
       }
       const ext = path.extname(file).toLowerCase();
-      const outputFilePath = getOutputFilePath(file, baseDir, output);
+      const outputFilePath = getOutputFilePath(file, srcBaseDir, output);
       logger.info(`(${index}/${totalCount}) ${file} ...`);
       const mdProcessor = this.mdProcessorFactory.getProcessor(ext);
       if (!mdProcessor) {
@@ -136,6 +136,41 @@ export class FileWalker {
       }
       await this.mdHashRepository.save(mdHash);
       logger.info(`${file} writed to ${outputFilePath}`);
+    }
+
+    if (Config.SYNC_DELETE) {
+      await this.syncDelete(files, output, srcBaseDir);
+    }
+  }
+
+  private async syncDelete(
+    srcFiles: string[],
+    outputDir: string,
+    srcBaseDir: string
+  ): Promise<void> {
+    const nmzSrcBaseDir = path.normalize(srcBaseDir);
+    const nmzOutputDir = path.normalize(outputDir);
+    const relativeSrcFiles = srcFiles.map(file =>
+      file.substring(nmzSrcBaseDir.length + 1)
+    );
+    logger.info(`relativeSrcFiles=${relativeSrcFiles}`);
+    const dstFiles = glob.globSync(path.join(outputDir, '**/*'));
+    // dstFiles を走査して、srcFiles にないファイルを削除する
+    for (const dstFile of dstFiles) {
+      if (fs.lstatSync(dstFile).isDirectory()) {
+        continue;
+      }
+      if (dstFile.match(/\/\.git\//)) {
+        continue;
+      }
+      const relativeDstFile = dstFile.substring(nmzOutputDir.length + 1);
+      logger.info(`relativeDstFile=${relativeDstFile}`);
+      if (!relativeSrcFiles.includes(relativeDstFile)) {
+        logger.info(`delete ${dstFile}`);
+        fs.unlinkSync(dstFile);
+        const srcFile = path.join(srcBaseDir, relativeDstFile);
+        await this.mdHashRepository.deleteByFile(srcFile);
+      }
     }
   }
 }

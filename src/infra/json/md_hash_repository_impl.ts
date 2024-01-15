@@ -24,4 +24,8 @@ export class MdHashRepositoryImpl implements IMdHashRepository {
     const rows = await this.client.rows();
     return rows.get(file);
   }
+
+  async deleteByFile(id: string): Promise<void> {
+    await this.client.deleteById(id);
+  }
 }

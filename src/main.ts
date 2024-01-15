@@ -24,10 +24,15 @@ const program = new Command();
   program
     .version(version)
     .name('md-translation-gpt')
-    .option('-d, --debug', 'enables verbose logging', false)
+    .option('-v, --verbose', 'enables verbose logging', false)
     .requiredOption('-p, --pattern <pattern>', 'glob pattern to process files')
     .requiredOption('-o, --output <output>', 'output directory')
     .option('-f, --force', 'overwrite existing files', false)
+    .option(
+      '-d, --delete',
+      'Deletes files that exist only in the output directory and not in the input directory',
+      false
+    )
     .option(
       '-a, --accuracy <number>',
       'set translation accuracy threshold',
@@ -47,7 +52,8 @@ const program = new Command();
         }
         Config.TRANSLATION_CORRECTNESS_THRESHOLD = request.accuracy;
         Config.IS_OVERWRITE = request.force;
-        Config.IS_VERBOSE = request.debug;
+        Config.IS_VERBOSE = request.verbose;
+        Config.SYNC_DELETE = request.delete;
         if (Config.OPENAI_API_KEY === '') {
           throw new Error('OPENAI_API_KEY is not set');
         }

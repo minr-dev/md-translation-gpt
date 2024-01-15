@@ -12,6 +12,7 @@ export const Config = {
   TRANSLATION_CORRECTNESS_THRESHOLD: 0.97,
   IS_OVERWRITE: false,
   IS_VERBOSE: false,
+  SYNC_DELETE: false,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
   DATA_DIR: process.env.DATA_DIR || '',
 
