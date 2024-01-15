@@ -6,6 +6,7 @@ import { Embeddings } from '@langchain/core/embeddings.js';
 import { connect } from 'vectordb';
 import { Config } from '../../shared/config.js';
 import { logger } from '../../shared/logger.js';
+import path from 'path';
 
 const DEFAULT_TABLE_NAME = 'md-translation-db';
 // lancedbのスキーマはダミーの1レコードから作成される。
@@ -48,7 +49,7 @@ export class LanceDBClient {
     if (this._vectorStore) {
       return this._vectorStore;
     }
-    const dir = Config.LANCEDB_DIR;
+    const dir = path.join(Config.DATA_DIR, 'lancedb');
     const db = await connect(dir);
     const tableNames = await db.tableNames();
     let table;

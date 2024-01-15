@@ -6,12 +6,11 @@ if (result.error) {
 }
 
 export const Config = {
-  TRANSLATION_CORRECTNESS_THRESHOLD: 0.9,
+  TRANSLATION_CORRECTNESS_THRESHOLD: 0.97,
   IS_OVERWRITE: false,
   IS_VERBOSE: false,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
-  LANCEDB_DIR: process.env.LANCEDB_DIR || '',
-  JSON_DIR: process.env.JSON_DIR || '',
+  DATA_DIR: process.env.DATA_DIR || '',
 
   PINECONE_API_KEY: process.env.PINECONE_API_KEY || '',
   PINECONE_ENVIRONMENT: process.env.PINECONE_ENVIRONMENT || '',

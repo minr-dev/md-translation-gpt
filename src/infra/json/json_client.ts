@@ -15,7 +15,7 @@ export class JsonClient<T extends Entity<string>> {
     readonly jsonFile: string,
     private factory: IEntityFactory<T>
   ) {
-    this.jsonPath = path.join(Config.JSON_DIR, jsonFile);
+    this.jsonPath = path.join(Config.DATA_DIR, 'json', jsonFile);
   }
 
   async rows(): Promise<Map<string, T>> {

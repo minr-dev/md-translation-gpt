@@ -51,11 +51,8 @@ const program = new Command();
         if (Config.OPENAI_API_KEY === '') {
           throw new Error('OPENAI_API_KEY is not set');
         }
-        if (Config.LANCEDB_DIR === '') {
-          throw new Error('LANCEDB_DIR is not set');
-        }
-        if (Config.JSON_DIR === '') {
-          throw new Error('JSON_DIR is not set');
+        if (Config.DATA_DIR === '') {
+          throw new Error('DATA_DIR is not set');
         }
         const llm = new OpenAIModel();
         const translator = new ProofreadTranslatorImpl(llm);
