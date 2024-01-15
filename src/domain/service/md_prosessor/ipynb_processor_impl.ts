@@ -19,7 +19,7 @@ export class IpynbProcessorImpl implements IMdProcessor {
       if (cell.cell_type === 'markdown') {
         const md = (cell.source as string[]).join('');
         const result = await this.mdProcessor.process(ctx, md);
-        cell.source = result.split('\n');
+        cell.source = result.split('\n').map((line: string) => `${line}\n`);
       }
     }
     return JSON.stringify(json, null, 1);
