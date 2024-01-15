@@ -25,7 +25,10 @@ const program = new Command();
     .version(version)
     .name('md-translation-gpt')
     .option('-v, --verbose', 'enables verbose logging', false)
-    .requiredOption('-p, --pattern <pattern>', 'glob pattern to process files')
+    .requiredOption(
+      '-p, --pattern <pattern>',
+      'source files using a glob pattern'
+    )
     .requiredOption('-o, --output <output>', 'output directory')
     .option('-f, --force', 'overwrite existing files', false)
     .option(
@@ -43,7 +46,7 @@ const program = new Command();
         }
         return parsedValue;
       },
-      0.9
+      0.97
     )
     .action(async (request: any): Promise<void> => {
       try {
