@@ -1,8 +1,11 @@
 import dotenv from 'dotenv';
+import { existsSync } from 'fs';
 
-const result = dotenv.config();
-if (result.error) {
-  throw result.error;
+if (existsSync('.env')) {
+  const result = dotenv.config();
+  if (result.error) {
+    throw result.error;
+  }
 }
 
 export const Config = {

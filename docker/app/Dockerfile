@@ -35,9 +35,12 @@ RUN apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false
 WORKDIR ${APP_HOME}
 COPY package.json ${APP_HOME}
 COPY package-lock.json ${APP_HOME}
+COPY tsconfig.json ${APP_HOME}
 COPY .husky/ ${APP_HOME}/.husky/
 COPY src/ ${APP_HOME}/src/
+COPY scripts/ ${APP_HOME}/scripts/
 RUN chown -R $USERNAME:$USERNAME ${APP_HOME}
 
 USER $USERNAME
 RUN npm install
+RUN npm run build

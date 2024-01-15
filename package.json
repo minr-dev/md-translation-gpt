@@ -8,11 +8,11 @@
     "bin/**/*"
   ],
   "bin": {
-    "main": "./bin/index.js"
+    "md-translation-gpt": "./lib/main.js"
   },
   "scripts": {
     "dotenv": "shx cp .env.example .env",
-    "build": "tsc && tsc-alias",
+    "build": "tsc && tsc-alias && node --loader ts-node/esm scripts/postbuild.ts",
     "clean": "rm -rf ./lib/",
     "cm": "cz",
     "coverage": "codecov",

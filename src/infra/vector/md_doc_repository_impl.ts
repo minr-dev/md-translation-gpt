@@ -1,4 +1,4 @@
-import { Document } from 'langchain/document';
+// import { Document } from 'langchain/document';
 import { MdDoc, MdDocId } from '../../domain/md_doc.js';
 import { IMdDocRepository } from '../../domain/repository/md_doc_repository.js';
 import { LanceDBClient } from './lancedb_client.js';
@@ -8,7 +8,10 @@ import { DocumentInterface } from '@langchain/core/documents';
 export class MdDocRepositoryImpl implements IMdDocRepository {
   private client = new LanceDBClient();
 
+  /* eslint-disable @typescript-eslint/no-unused-vars */
   async save(mdDoc: MdDoc): Promise<void> {
+    /* TODO: LanceDB を使って何をするか明確な目的がないので、
+             いったん、コメントアウトして無駄なデータ作成をしないようにしておく
     const doc = new Document({
       metadata: {
         file: mdDoc.id.file,
@@ -19,6 +22,7 @@ export class MdDocRepositoryImpl implements IMdDocRepository {
       pageContent: mdDoc.en,
     });
     await this.client.save(doc);
+    */
   }
 
   async getByEn(en: string): Promise<MdDoc | undefined> {
