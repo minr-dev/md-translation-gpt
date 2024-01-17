@@ -1,6 +1,5 @@
 import path from 'path';
 import fs from 'fs';
-import { Config } from '../../shared/config.js';
 import { Entity } from '../../domain/entity.js';
 
 export interface IEntityFactory<T> {
@@ -9,14 +8,11 @@ export interface IEntityFactory<T> {
 
 export class JsonClient<T extends Entity<string>> {
   private _rows: Map<string, T> | undefined;
-  private jsonPath: string;
 
   constructor(
-    readonly jsonFile: string,
+    readonly jsonPath: string,
     private factory: IEntityFactory<T>
-  ) {
-    this.jsonPath = path.join(Config.DATA_DIR, 'json', jsonFile);
-  }
+  ) {}
 
   async rows(): Promise<Map<string, T>> {
     return await this.loadSession();

@@ -50,23 +50,22 @@ const program = new Command();
     )
     .action(async (request: any): Promise<void> => {
       try {
-        if (request.debug) {
-          logger.setLogLevel(LogLevel.VERBOSE);
-        }
         Config.TRANSLATION_CORRECTNESS_THRESHOLD = request.accuracy;
         Config.IS_OVERWRITE = request.force;
         Config.IS_VERBOSE = request.verbose;
         Config.SYNC_DELETE = request.delete;
+        if (Config.IS_VERBOSE) {
+          logger.setLogLevel(LogLevel.VERBOSE);
+        }
         if (Config.OPENAI_API_KEY === '') {
           throw new Error('OPENAI_API_KEY is not set');
-        }
-        if (Config.DATA_DIR === '') {
-          throw new Error('DATA_DIR is not set');
         }
         const llm = new OpenAIModel();
         const translator = new ProofreadTranslatorImpl(llm);
         const mdDocRepository = new MdDocRepositoryImpl();
-        const mdHashRepository = new MdHashRepositoryImpl();
+        const mdHashRepository = new MdHashRepositoryImpl(
+          request.output as string
+        );
         const mdProcessorFactory = new MdProcessorFactoryImpl(
           translator,
           mdDocRepository

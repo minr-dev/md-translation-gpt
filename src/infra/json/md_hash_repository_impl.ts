@@ -1,3 +1,4 @@
+import path from 'path';
 import { MdHash } from '../../domain/md_hash.js';
 import { IMdHashRepository } from '../../domain/repository/md_hash_repository.js';
 import { IEntityFactory, JsonClient } from './json_client.js';
@@ -11,10 +12,15 @@ class MdHashEntityFactoryImpl implements IEntityFactory<MdHash> {
 }
 
 export class MdHashRepositoryImpl implements IMdHashRepository {
-  private client = new JsonClient<MdHash>(
-    JSON_NAME,
-    new MdHashEntityFactoryImpl()
-  );
+  private client;
+
+  constructor(outputDir: string) {
+    const jsonPath = path.join(outputDir, '.data', 'json', JSON_NAME);
+    this.client = new JsonClient<MdHash>(
+      jsonPath,
+      new MdHashEntityFactoryImpl()
+    );
+  }
 
   async save(mdHash: MdHash): Promise<void> {
     await this.client.save(mdHash);
