@@ -228,7 +228,7 @@ export class MdProcessorImpl implements IMdProcessor {
       if (chunkTnode && tnode.type !== 'text-chunk') {
         const translated = translatedChunks.join('\n');
         if (translated != chunkTnode.targetText) {
-          this.makeParagraphReplaceNodes(translated, tnode);
+          this.makeParagraphReplaceNodes(ctx, translated, tnode);
         }
         chunkTnode = undefined;
       }
@@ -268,7 +268,7 @@ export class MdProcessorImpl implements IMdProcessor {
             translatedChunks.push(translated);
           }
         } else {
-          this.makeParagraphReplaceNodes(translated, tnode);
+          this.makeParagraphReplaceNodes(ctx, translated, tnode);
         }
       } else {
         throw new Error(`unknown node type: ${JSON.stringify(tnode.node)}`);
@@ -277,7 +277,7 @@ export class MdProcessorImpl implements IMdProcessor {
     if (chunkTnode) {
       const translated = translatedChunks.join('\n');
       if (translated != chunkTnode.targetText) {
-        this.makeParagraphReplaceNodes(translated, chunkTnode);
+        this.makeParagraphReplaceNodes(ctx, translated, chunkTnode);
       }
       chunkTnode = undefined;
     }
@@ -287,22 +287,26 @@ export class MdProcessorImpl implements IMdProcessor {
   /**
    * 翻訳結果で、置き替えようの node を作って、tnode.replaceNodes にセットする
    *
-   * 原文も、blockquote で囲んで、翻訳結果の次の node として追加する
+   * ctx.keepOriginal が指定されている場合、原文も blockquote で囲んで、翻訳結果の次の node として追加する
    *
    * @param translated
    * @param tnode
    */
   protected makeParagraphReplaceNodes(
+    ctx: AppContext,
     translated: string,
     tnode: ITargetNode
   ): void {
     const translatedRoot = this.processor.parse(translated);
-    tnode.replaceNodes = translatedRoot.children.concat([
-      {
-        type: 'blockquote',
-        children: [tnode.node],
-      } as Blockquote,
-    ]);
+    tnode.replaceNodes = translatedRoot.children;
+    if (ctx.quoteOriginal) {
+      tnode.replaceNodes = tnode.replaceNodes.concat([
+        {
+          type: 'blockquote',
+          children: [tnode.node],
+        } as Blockquote,
+      ]);
+    }
   }
 
   /**
@@ -345,10 +349,16 @@ export class MdProcessorImpl implements IMdProcessor {
       isTitleBlock: true,
       documentName: ctx.documentName,
     });
-    if (dstText === '' || srcText === dstText) {
+    if (dstText === '' || srcText.trim() === dstText.trim()) {
       return srcText;
     } else {
-      return `${srcText} | ${dstText}`;
+      if (ctx.quoteOriginal) {
+        return `${srcText} | ${dstText}`;
+      } else {
+        const matcher = srcText.match(/(^#+)[^#]/);
+        const prefix = matcher ? `${matcher[1]} ` : '';
+        return `${prefix}${dstText}`;
+      }
     }
   }
 

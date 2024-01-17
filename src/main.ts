@@ -49,6 +49,10 @@ const program = new Command();
       },
       0.97
     )
+    // commanderでは、--no-というプレフィックスは、指定された場合に対応する値をfalseに設定するという意味で
+    // --no-quoteの場合、quoteという値がfalseに設定されるということになる、無指定の状態のデフォルトは quote=true なので、
+    // 3つ目の defaultValue の引数も true になる（ちょっとややこしい）
+    .option('--no-quote', 'Remove the original text from the translation', true)
     .action(async (request: any): Promise<void> => {
       try {
         Config.TRANSLATION_CORRECTNESS_THRESHOLD = request.accuracy;
@@ -73,7 +77,9 @@ const program = new Command();
         );
         const ctx = AppContext.init();
         ctx.documentName = request.name as string;
+        ctx.quoteOriginal = request.quote;
         logger.info('documentName:', ctx.documentName);
+        logger.verbose('quoteOriginal:', ctx.quoteOriginal);
         const walker = new FileWalker(mdProcessorFactory, mdHashRepository);
         await walker.walk(
           ctx,

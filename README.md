@@ -72,6 +72,7 @@ Options:
   -f, --force              overwrite existing files (default: false)
   -d, --delete             Deletes files that exist only in the output directory and not in the input directory (default: false)
   -a, --accuracy <number>  set translation accuracy threshold (default: 0.97)
+  --no-quote               Remove the original text from the translation
   -h, --help               display help for command
 ```
 
@@ -81,6 +82,7 @@ Options:
 - -f, --force: 出力先に同名のファイルが存在する場合に、上書きするかどうかを指定します。デフォルトは false です。
 - -d, --delete: 出力先にあって、入力先にないファイルを削除するかどうかを指定します。デフォルトは false です。
 - -a, --accuracy: 翻訳精度を指定します。0.0 から 1.0 の範囲で指定します。デフォルトは 0.97 です。
+- --no-quote: デフォルトでは原文を引用の形式で翻訳結果の中に残しますが、このオプションを指定することで原文は出力されません。
 
 ## デバッグ
 

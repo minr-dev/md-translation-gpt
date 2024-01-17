@@ -3,6 +3,8 @@ export class AppContext {
   private values: Record<string, any> = {};
 
   documentName = '__unknown__';
+  quoteOriginal = true;
+
   file = '__unknown__';
   nodeNo = 1;
 
