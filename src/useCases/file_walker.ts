@@ -113,7 +113,8 @@ export class FileWalker {
       }
       const data = readFileSync(file, 'utf-8');
       const hash = crypto.createHash('sha256').update(data).digest('hex');
-      let mdHash = await this.mdHashRepository.getByFile(file);
+      const relativeSrcFile = path.relative(srcBaseDir, file);
+      let mdHash = await this.mdHashRepository.getByFile(relativeSrcFile);
       if (fs.existsSync(outputFilePath)) {
         logger.verbose(
           `hash: src: ${hash} / db: ${mdHash ? mdHash.hash : 'none'}`
@@ -130,7 +131,7 @@ export class FileWalker {
       const result = await mdProcessor.process(ctx, data);
       writeTranslatedMd(outputFilePath, result);
       if (!mdHash) {
-        mdHash = new MdHash(file, hash);
+        mdHash = new MdHash(relativeSrcFile, hash);
       } else {
         mdHash = mdHash.renewHash(hash);
       }
@@ -148,14 +149,11 @@ export class FileWalker {
     outputDir: string,
     srcBaseDir: string
   ): Promise<void> {
-    const nmzSrcBaseDir = path.normalize(srcBaseDir);
-    const nmzOutputDir = path.normalize(outputDir);
     const relativeSrcFiles = srcFiles.map(file =>
-      file.substring(nmzSrcBaseDir.length + 1)
+      path.relative(srcBaseDir, file)
     );
-    logger.info(`relativeSrcFiles=${relativeSrcFiles}`);
     const dstFiles = glob.globSync(path.join(outputDir, '**/*'));
-    // dstFiles を走査して、srcFiles にないファイルを削除する
+    // dstFiles を走査して、relativeSrcFiles にないファイルを削除する
     for (const dstFile of dstFiles) {
       if (fs.lstatSync(dstFile).isDirectory()) {
         continue;
@@ -163,13 +161,11 @@ export class FileWalker {
       if (dstFile.match(/\/\.git\//)) {
         continue;
       }
-      const relativeDstFile = dstFile.substring(nmzOutputDir.length + 1);
-      logger.info(`relativeDstFile=${relativeDstFile}`);
+      const relativeDstFile = path.relative(outputDir, dstFile);
       if (!relativeSrcFiles.includes(relativeDstFile)) {
         logger.info(`delete ${dstFile}`);
         fs.unlinkSync(dstFile);
-        const srcFile = path.join(srcBaseDir, relativeDstFile);
-        await this.mdHashRepository.deleteByFile(srcFile);
+        await this.mdHashRepository.deleteByFile(relativeDstFile);
       }
     }
   }
