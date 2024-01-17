@@ -22,7 +22,7 @@
     "test:watch": "jest --watch",
     "test": "jest --coverage",
     "typecheck": "tsc --noEmit",
-    "dev": "npm run build && node lib/main"
+    "dev": "node --loader ts-node/esm src/main.ts"
   },
   "license": "MIT",
   "engines": {

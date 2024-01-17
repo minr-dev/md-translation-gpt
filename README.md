@@ -66,7 +66,7 @@ Usage: md-translation-gpt [options]
 Options:
   -V, --version            output the version number
   -v, --verbose            enables verbose logging (default: false)
-  -p, --pattern <pattern>  glob pattern to process files
+  -p, --pattern <pattern>  source files using a glob pattern
   -o, --output <output>    output directory
   -f, --force              overwrite existing files (default: false)
   -d, --delete             Deletes files that exist only in the output directory and not in the input directory (default: false)
@@ -79,3 +79,11 @@ Options:
 - -f, --force: 出力先に同名のファイルが存在する場合に、上書きするかどうかを指定します。デフォルトは false です。
 - -d, --delete: 出力先にあって、入力先にないファイルを削除するかどうかを指定します。デフォルトは false です。
 - -a, --accuracy: 翻訳精度を指定します。0.0 から 1.0 の範囲で指定します。デフォルトは 0.97 です。
+
+## デバッグ
+
+VSCode を使っている場合、JavaScript Debug Terminal で以下のように実行すると、デバッグできます。
+
+```bash
+node --loader ts-node/esm src/main.ts 
+```
