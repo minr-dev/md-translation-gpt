@@ -2,6 +2,7 @@ export class AppContext {
   private static globalCtx: AppContext;
   private values: Record<string, any> = {};
 
+  documentName = '__unknown__';
   file = '__unknown__';
   nodeNo = 1;
 

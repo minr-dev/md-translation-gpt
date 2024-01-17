@@ -9,6 +9,7 @@ export interface EtojInput {
   targetTextWithContext: string;
   targetText: string;
   isTitleBlock: boolean;
+  documentName: string;
 }
 
 export interface EtojOutput {
@@ -28,7 +29,7 @@ AIは、親切で、丁寧で、正直で、洗練されていて、感情的で
 const contextTemplate = `----------------
 <Context>
 英文のテクニカルドキュメントを日本語に意訳します。
-以下は、langchainのマニュアルの一部です。全体的な文脈を把握した上で翻訳に取り組んでください。
+以下は、「{documentName}」の一部です。全体的な文脈を把握した上で翻訳に取り組んでください。
 """{targetTextWithContext}
 """
 `;

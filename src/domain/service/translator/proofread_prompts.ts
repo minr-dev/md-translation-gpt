@@ -27,7 +27,7 @@ export interface ProofreadOutput {
 
 const contextTemplate = `<Context>
 英文のテクニカルドキュメントの日本語訳を添削します。
-以下は、langchainのマニュアルの一部です。全体的な文脈を把握した上で添削に取り組んでください。
+以下は、「{documentName}」の一部です。全体的な文脈を把握した上で添削に取り組んでください。
 """{targetTextWithContext}
 """
 `;

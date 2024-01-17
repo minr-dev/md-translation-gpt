@@ -343,6 +343,7 @@ export class MdProcessorImpl implements IMdProcessor {
       targetTextWithContext: tnode.targetTextWithContext,
       targetText: text,
       isTitleBlock: true,
+      documentName: ctx.documentName,
     });
     if (dstText === '' || srcText === dstText) {
       return srcText;
@@ -359,6 +360,7 @@ export class MdProcessorImpl implements IMdProcessor {
       targetTextWithContext: tnode.targetTextWithContext,
       targetText: tnode.targetText,
       isTitleBlock: false,
+      documentName: ctx.documentName,
     });
     if (dstText === '') {
       return tnode.targetText;

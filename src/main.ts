@@ -25,6 +25,7 @@ const program = new Command();
     .version(version)
     .name('md-translation-gpt')
     .option('-v, --verbose', 'enables verbose logging', false)
+    .requiredOption('-n, --name <name>', 'Name of the document')
     .requiredOption(
       '-p, --pattern <pattern>',
       'source files using a glob pattern'
@@ -71,6 +72,8 @@ const program = new Command();
           mdDocRepository
         );
         const ctx = AppContext.init();
+        ctx.documentName = request.name as string;
+        logger.info('documentName:', ctx.documentName);
         const walker = new FileWalker(mdProcessorFactory, mdHashRepository);
         await walker.walk(
           ctx,

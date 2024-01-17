@@ -66,6 +66,7 @@ Usage: md-translation-gpt [options]
 Options:
   -V, --version            output the version number
   -v, --verbose            enables verbose logging (default: false)
+  -n, --name <name>        Name of the document
   -p, --pattern <pattern>  source files using a glob pattern
   -o, --output <output>    output directory
   -f, --force              overwrite existing files (default: false)
@@ -74,6 +75,7 @@ Options:
   -h, --help               display help for command
 ```
 
+- -n, --name: ドキュメントの名前を指定します。（例）LangChainのマニュアル
 - -p, --pattern: 原文のファイルを glob パターンで指定します。（例）../en-product/docs/**/*
 - -o, --output: 翻訳後のファイルを出力するディレクトリを指定します。
 - -f, --force: 出力先に同名のファイルが存在する場合に、上書きするかどうかを指定します。デフォルトは false です。
