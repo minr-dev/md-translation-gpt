@@ -26,9 +26,7 @@ export class MdxProcessorImpl extends MdProcessorImpl {
       const tnode = result.tnodes[i];
       // https://docusaurus.io/docs/next/markdown-features/toc#inline-table-of-contents
       // 例: import TOCInline from '@theme/TOCInline';
-      if (
-        tnode.targetText.match(/^\s*import\s+DocCardList\s+from\s+["']@theme/)
-      ) {
+      if (tnode.targetText.match(/^\s*import\s+\S+\s+from\s+["']@theme/)) {
         removeIndexes.push(i);
         continue;
       }
