@@ -1,8 +1,5 @@
-import { remark } from 'remark';
-import { Parent, Blockquote, RootContent } from 'mdast';
-import frontmatter from 'remark-frontmatter';
-import stringify from 'remark-stringify';
-import { Root } from 'remark-parse/lib/index.js';
+import { Parent } from 'unist';
+import { Root, Blockquote, RootContent } from 'mdast';
 import { createByModelName, TikTokenizer } from '@microsoft/tiktokenizer';
 import { Document } from 'langchain/document';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
@@ -14,6 +11,7 @@ import { AppContext } from '../../../shared/app_context.js';
 import { MdDoc, MdDocId } from '../../md_doc.js';
 import { IMdDocRepository } from '../../repository/md_doc_repository.js';
 import { EtojInput } from '../translator/etoj_prompts.js';
+import { generalProcessor, blockquoteBeautifyProcessor } from './md_parser.js';
 
 let tokenizer: TikTokenizer | undefined = undefined;
 
@@ -71,7 +69,9 @@ const visitParent = async (
  * @returns 翻訳後の md
  */
 export class MdProcessorImpl implements IMdProcessor {
-  protected processor = remark().use(frontmatter, ['yaml']).use(stringify);
+  protected get processor() {
+    return generalProcessor;
+  }
 
   constructor(
     protected translator: ITranslator<EtojInput, string>,
@@ -334,7 +334,10 @@ export class MdProcessorImpl implements IMdProcessor {
     }
     logger.debug('ast', JSON.stringify(result.ast, null, 2));
     const md = this.processor.stringify(result.ast);
-    return Promise.resolve(md);
+    // blockquoteBeautifyProcessor で blockquote を整形する。
+    // @see md_parser.ts
+    const reformMd = blockquoteBeautifyProcessor.processSync(md);
+    return Promise.resolve(String(reformMd));
   }
 
   protected async translateHeadings(
