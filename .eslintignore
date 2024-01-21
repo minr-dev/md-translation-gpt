@@ -1,2 +1,3 @@
 src/types/global.d.ts
 src/__tests__/integration/bin.js
+scripts/postbuild.ts
