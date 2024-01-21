@@ -1,11 +1,10 @@
 {
   "name": "md-translation-gpt",
-  "version": "0.0.1",
-  "description": "A template for creating npm CLI tools using TypeScript and VSCode",
+  "version": "0.1.0",
+  "description": "A tool for translating documents from English to Japanese using ChatGPT and saving them.",
   "files": [
     "!lib/__tests__/**/*",
-    "lib/**/*",
-    "bin/**/*"
+    "lib/**/*"
   ],
   "bin": {
     "md-translation-gpt": "./lib/main.js"
